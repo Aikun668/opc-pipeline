@@ -1,0 +1,32 @@
+[
+  {
+    "id": "BENCH-BIZ-001",
+    "type": "feature",
+    "description": "【数据清洗脚本】读取CSV文件，去除完全重复的行；手机号统一格式为 +86-138-0000-0000；缺失字段用 N/A 填充；输出清洗后的新CSV文件。"
+  },
+  {
+    "id": "BENCH-BIZ-002",
+    "type": "feature",
+    "description": "【Todo CLI工具】支持 add/list/done/delete 命令；数据持久化到本地JSON文件；list 时显示序号、状态（✅/⬜）、任务内容。"
+  },
+  {
+    "id": "BENCH-BIZ-003",
+    "type": "feature",
+    "description": "【电商订单数据看板】展示总销售额、订单量、客单价趋势折线图；各品类销售占比饼图；各地区销售额排名柱状图；支持按月份筛选。图表可交互，页面在浏览器直接打开（单HTML或本地启动），数据可替换不硬编码。"
+  },
+  {
+    "id": "BENCH-BIZ-004",
+    "type": "feature",
+    "description": "【API接口聚合服务】用任意后端框架写聚合接口 GET /user/profile/:id；并发请求三个下游服务（mock数据模拟）；任意一个下游超时>2s则该字段返回降级默认值，不影响整体响应；响应时间<500ms。验收：有降级兜底逻辑，写出接口测试用例覆盖正常/超时/全挂三种场景，README说明本地启动方式。"
+  },
+  {
+    "id": "BENCH-BIZ-005",
+    "type": "feature",
+    "description": "【智能日程助手 Web App】用户输入自然语言（如\"帮我把明天下午3点的客户会议推迟两小时\"），系统自动解析并更新日程；日历周视图展示；支持事件增删改查；冲突检测（完全重叠、部分重叠）并提示备选时间。前端React，NLP调用LLM API，数据本地持久化。验收：10条指令≥8条正确执行。"
+  },
+  {
+    "id": "BENCH-BIZ-006",
+    "type": "feature",
+    "description": "【SaaS多租户数据分析平台 MVP】每个企业独立账号，数据隔离；支持上传Excel/CSV，自动识别字段类型；拖拽式图表构建（折线、柱状、饼图、散点图）；AI分析数据返回≥3条洞察；Dashboard首页；企业内管理员/普通用户权限；JWT登录鉴权token过期可配置；10MB上传限制，异常文件错误提示。前端React，后端Python或Node.js，README+一键启动脚本。"
+  }
+]

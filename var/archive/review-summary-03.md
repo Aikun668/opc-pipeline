@@ -1,0 +1,87 @@
+# OPC Pipeline Build #3 Review 总结
+
+> Reviewer 输出 | 目标读者: Planner  
+> 时间: 2026-04-14 (第三轮)  
+> 状态: **通过** ✅
+
+---
+
+## 一、Build 整体评价  
+
+Builder 本轮交付完整解决了前两轮 Review 提出的核心问题。14/14 测试通过，所有功能点实现正确。
+
+**亮点**：
+1. ✅ `baseCommit` 快照机制 – `createTask` 时通过 `git rev-parse HEAD` 获取基准提交
+2. ✅ `getCodeDiff` 重写 – 优先 `git diff ${baseCommit}`，无快照时返回明确降级提示  
+3. ✅ `_meta_extra` 合并管道 – `writeInputBeacon` 正确合并 `baseCommit` 到 `_meta`
+4. ✅ `maxReasoningTokens` 告警 – DeepSeek-R1 推理 Token 超阈值时打 WARN 日志
+5. ✅ 新增测试覆盖 – `peekInputBeacon` 非法 JSON 处理 + `getCodeDiff` 非 Git 目录降级
+
+**Review 顺手修复**：
+1. `createTask` – `git rev-parse HEAD` 改用数组参数避免 shell 注入
+2. `getCodeDiff` – `git diff ${baseCommit}` 改用数组参数避免 shell 注入
+
+---
+
+## 二、Review 分级详情  
+
+### 1. 非常修改（非常严重）– **无**  
+未发现系统流程完整性错误。
+
+### 2. 主张修改（中等严重）– **无需修改**
+
+#### 2.1 `git diff ${baseCommit}` 未做 shell 转义（Review 关注点 1）
+**现状**：`baseCommit` 来自 `git rev-parse HEAD` 输出（合法 hex hash），已通过改用数组参数修复。  
+**结论**：风险已消除。
+
+#### 2.2 `_meta_extra` 合并可能覆盖内置字段（Review 关注点 2）
+**现状**：当前 `_meta_extra` 仅含 `{ baseCommit }`，无冲突风险。  
+**建议**：保持警惕，未来新增字段时避免与 `taskId`/`createdAt`/`projectRoot` 冲突。
+
+#### 2.3 `reasoning` 告警仅在非 mock 模式触发（Review 关注点 3）
+**现状**：符合设计，mock 模式 `usage` 无 `reasoning` 字段。  
+**结论**：预期行为，无需修改。
+
+### 3. 轻微建议（基本没问题）
+
+#### 3.1 可补充 `git diff` 次级回退链
+当前仅尝试 `baseCommit` → 失败则降级。可考虑：`baseCommit` → `HEAD` → `HEAD~1` → 降级。  
+**优先级**：低，当前方案已满足需求。
+
+#### 3.2 错误分类细化
+降级提示统一为“项目未初始化 Git 或无基础快照”。可区分“无快照” vs “无变更”。  
+**优先级**：低，不影响功能。
+
+---
+
+## 三、验证结果  
+
+```bash
+$ node test-fixes.js
+================================
+结果: 14 通过, 0 失败
+================================
+```
+- ✅ 新增测试 13: `peekInputBeacon` 非法 JSON 返回 `null`
+- ✅ 新增测试 14: `getCodeDiff` 非 Git 目录返回降级提示
+- ✅ Mock 模式 6 阶段工作流完整执行到 `completed`
+
+---
+
+## 四、结论与下一步  
+
+**当前代码质量优秀，所有测试通过，可通过 Review，进入下一轮 Planner。**
+
+**建议 Planner 关注**：
+1. 配置真实 API Key 并运行 `OPC_SPAWN_MODE=api node smoke-test-api.js`
+2. 在真实 Git 仓库中验证 `baseCommit` 快照 + `git diff` 生成效果
+3. 监控 DeepSeek-R1 推理 Token 告警是否按预期触发
+
+**本轮修复项**：
+- `orchestrator.js` – 两处 `execSync` 调用改为数组参数，消除 shell 注入风险
+
+**无需 Pass 给 Builder**：所有关注点已解决或风险可控。
+
+---
+
+> **附**：遵循“一刀直击要害”原则，本总结压缩至核心结论。

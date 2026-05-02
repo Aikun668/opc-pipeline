@@ -1,0 +1,10 @@
+OPC Pipeline Smoke Test Report
+时间: 2026-04-14T11:32:15.433Z
+结果: 6/6 通过
+
+planning:Claude/Anthropic:OK:7084ms
+coding:GLM/智谱:OK:4335ms
+prefilter:DeepSeek-chat:OK:1711ms
+review:DeepSeek-R1:OK:1546ms
+testing:Kimi/月之暗面:OK:1547ms
+delivery:Claude/Anthropic:OK:7351ms

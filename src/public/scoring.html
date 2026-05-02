@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OPC Pipeline · 质量评分</title>
+<style>
+:root {
+  --bg: #F5F4F0;
+  --card: #FFFFFF;
+  --text: #4A4A4A;
+  --text-secondary: #9CA3A8;
+  --divider: #E8E5DF;
+  --planning: #7B8FA1;
+  --coding: #8DA290;
+  --review: #B4A4B7;
+  --testing: #C9A88C;
+  --delivery: #9CA3A8;
+  --success: #8DA290;
+  --error: #C48B8B;
+  --warning: #C9B88C;
+  --star-empty: #D4D0C8;
+  --star-fill: #C9A88C;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+.nav {
+  background: var(--card);
+  border-bottom: 1px solid var(--divider);
+  padding: 12px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.nav h1 { font-size: 16px; font-weight: 600; }
+.nav a { color: var(--text-secondary); text-decoration: none; font-size: 13px; }
+.nav a:hover { color: var(--text); }
+.container { display: flex; height: calc(100vh - 50px); }
+.left-panel {
+  width: 55%;
+  padding: 20px;
+  overflow-y: auto;
+  border-right: 1px solid var(--divider);
+}
+.right-panel {
+  width: 45%;
+  padding: 20px;
+  overflow-y: auto;
+}
+.task-selector {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.task-selector select {
+  padding: 6px 12px;
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  background: var(--card);
+  font-size: 13px;
+}
+.task-selector button {
+  padding: 6px 12px;
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  background: var(--card);
+  cursor: pointer;
+  font-size: 13px;
+}
+.task-selector button:hover { background: var(--bg); }
+.preview-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--divider);
+}
+.preview-tab {
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+}
+.preview-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--coding);
+  font-weight: 600;
+}
+.preview-tab.hidden { display: none; }
+.preview-content {
+  background: var(--card);
+  border-radius: 8px;
+  border: 1px solid var(--divider);
+  min-height: 400px;
+}
+.file-tree {
+  padding: 12px;
+  font-size: 13px;
+}
+.file-tree .folder {
+  cursor: pointer;
+  user-select: none;
+  margin: 2px 0;
+}
+.file-tree .folder .name { font-weight: 600; }
+.file-tree .folder .toggle {
+  display: inline-block;
+  width: 12px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.file-tree .file {
+  cursor: pointer;
+  padding: 2px 0 2px 20px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.file-tree .file:hover { color: var(--text); background: var(--bg); border-radius: 4px; }
+.file-tree .file.active { color: var(--text); background: var(--bg); border-radius: 4px; }
+.file-icon { display: inline-block; width: 16px; text-align: center; font-size: 12px; }
+.file-icon.js { color: #D4A843; }
+.file-icon.py { color: #4A8FB8; }
+.file-icon.html { color: #C9785C; }
+.file-icon.css { color: #5B8FC7; }
+.file-icon.md { color: var(--text-secondary); }
+.file-icon.json { color: #7BA85C; }
+.code-view {
+  padding: 16px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+}
+.code-view .line-num {
+  display: inline-block;
+  width: 36px;
+  text-align: right;
+  color: var(--text-secondary);
+  margin-right: 12px;
+  user-select: none;
+}
+.hl-string { color: #8DA290; }
+.hl-comment { color: var(--text-secondary); font-style: italic; }
+.hl-keyword { color: #7B8FA1; font-weight: 600; }
+.hl-number { color: #C9A88C; }
+.html-preview iframe {
+  width: 100%;
+  min-height: 400px;
+  border: none;
+}
+.score-card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 1px solid var(--divider);
+}
+.score-card h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text);
+}
+.auto-score-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.auto-score-header .score {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--coding);
+}
+.auto-score-header .label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.dimension-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.dimension-row:last-child { border-bottom: none; }
+.dimension-name { font-size: 13px; width: 80px; }
+.dimension-bar-bg {
+  flex: 1;
+  height: 6px;
+  background: var(--divider);
+  border-radius: 3px;
+  margin: 0 12px;
+  overflow: hidden;
+}
+.dimension-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.dimension-bar.high { background: var(--success); }
+.dimension-bar.medium { background: var(--testing); }
+.dimension-bar.low { background: var(--error); }
+.dimension-value {
+  font-size: 13px;
+  font-weight: 600;
+  width: 36px;
+  text-align: right;
+}
+.human-score-section { margin-top: 20px; }
+.human-score-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.human-score-row .label { font-size: 13px; }
+.stars {
+  display: flex;
+  gap: 4px;
+}
+.star {
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--star-empty);
+  transition: color 0.2s;
+  user-select: none;
+}
+.star:hover, .star.active { color: var(--star-fill); }
+.star-value {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-left: 8px;
+  min-width: 24px;
+}
+.notes-area {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  font-size: 13px;
+  resize: vertical;
+  min-height: 80px;
+  margin-top: 12px;
+  font-family: inherit;
+}
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.action-buttons button {
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.btn-primary { background: var(--coding); color: white; }
+.btn-primary:hover { opacity: 0.9; }
+.btn-secondary { background: var(--divider); color: var(--text); }
+.btn-secondary:hover { background: #DDD9D3; }
+.saved-toast {
+  position: fixed;
+  top: 60px;
+  right: 20px;
+  background: var(--success);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+.saved-toast.show { opacity: 1; }
+.history-section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--divider);
+}
+.history-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--divider);
+}
+.history-item:last-child { border-bottom: none; }
+</style>
+</head>
+<body>
+<div class="nav">
+  <h1>OPC Pipeline · 质量评分</h1>
+  <a href="/">← 返回监控</a>
+</div>
+<div class="container">
+  <div class="left-panel">
+    <div class="task-selector">
+      <span>轮次：</span>
+      <select id="roundSelect" onchange="changeRound()"></select>
+    </div>
+    <div class="task-selector">
+      <span>任务：</span>
+      <select id="taskSelect"></select>
+      <button onclick="prevTask()">←</button>
+      <button onclick="nextTask()">→</button>
+    </div>
+    <div class="preview-tabs">
+      <div class="preview-tab active" data-tab="files" onclick="switchTab('files')">文件</div>
+      <div class="preview-tab hidden" data-tab="html" onclick="switchTab('html')">HTML渲染</div>
+    </div>
+    <div class="preview-content">
+      <div id="fileTreeView" class="file-tree"></div>
+      <div id="codeView" class="code-view" style="display:none;"></div>
+      <div id="htmlView" class="html-preview" style="display:none;"></div>
+    </div>
+  </div>
+  <div class="right-panel">
+    <div class="score-card">
+      <h3>自动评分</h3>
+      <div class="auto-score-header">
+        <span class="score" id="autoTotal">-</span>
+        <span class="label">/100</span>
+      </div>
+      <div id="autoDimensions"></div>
+    </div>
+    <div class="score-card">
+      <h3>人工评分</h3>
+      <div class="human-score-section" id="humanDimensions"></div>
+      <textarea class="notes-area" id="notes" placeholder="备注..."></textarea>
+      <div class="action-buttons">
+        <button class="btn-primary" onclick="saveScore()">保存评分</button>
+        <button class="btn-secondary" onclick="resetScore()">重置</button>
+      </div>
+    </div>
+    <div class="history-section">
+      <div class="history-title">─── 历史评分 · 最近 3 轮 ───</div>
+      <div id="historyList"></div>
+    </div>
+  </div>
+</div>
+<div class="saved-toast" id="toast">已保存</div>
+
+<script>
+let currentTaskId = '';
+let taskScores = {};
+let taskFiles = {};
+let currentTab = 'files';
+let selectedFile = null;
+
+const HUMAN_DIMS = [
+  { key: 'completeness', label: '功能完成度' },
+  { key: 'codeQuality', label: '代码质量' },
+  { key: 'runnability', label: '可运行性' },
+  { key: 'security', label: '安全性' },
+  { key: 'satisfaction', label: '整体满意度' }
+];
+
+let currentRound = 'latest';
+let rounds = [];
+
+async function init() {
+  await loadRoundsSelector();
+  await loadScores();
+  await loadHistory();
+  if (Object.keys(taskScores).length > 0) {
+    const first = Object.keys(taskScores)[0];
+    selectTask(first);
+  }
+}
+
+async function loadRoundsSelector() {
+  try {
+    const res = await fetch('/api/rounds');
+    rounds = await res.json();
+    const sel = document.getElementById('roundSelect');
+    sel.innerHTML = '';
+    for (const r of rounds) {
+      const opt = document.createElement('option');
+      opt.value = r.roundId;
+      opt.textContent = `${r.roundId} (${r.date} · ${r.taskCount}任务)`;
+      sel.appendChild(opt);
+    }
+    if (rounds.length > 0) {
+      currentRound = rounds[rounds.length - 1].roundId;
+      sel.value = currentRound;
+    }
+  } catch (e) { console.error('loadRounds failed', e); }
+}
+
+function changeRound() {
+  currentRound = document.getElementById('roundSelect').value;
+  loadScores();
+}
+
+async function loadScores() {
+  try {
+    const res = await fetch(`/api/rounds/${currentRound}/scores`);
+    const data = await res.json();
+    taskScores = {};
+    const autoScores = data.autoScores || {};
+    const humanScores = data.humanScores || {};
+    for (const taskId of Object.keys(autoScores)) {
+      taskScores[taskId] = {
+        taskId,
+        autoScore: autoScores[taskId],
+        humanScore: humanScores[taskId] || null
+      };
+    }
+    populateTaskSelect();
+  } catch (e) { console.error('loadScores failed', e); }
+}
+
+function populateTaskSelect() {
+  const sel = document.getElementById('taskSelect');
+  sel.innerHTML = '';
+  for (const taskId of Object.keys(taskScores)) {
+    const opt = document.createElement('option');
+    opt.value = taskId;
+    opt.textContent = taskId;
+    sel.appendChild(opt);
+  }
+  sel.onchange = (e) => selectTask(e.target.value);
+}
+
+function prevTask() {
+  const ids = Object.keys(taskScores);
+  const idx = ids.indexOf(currentTaskId);
+  if (idx > 0) selectTask(ids[idx - 1]);
+}
+
+function nextTask() {
+  const ids = Object.keys(taskScores);
+  const idx = ids.indexOf(currentTaskId);
+  if (idx < ids.length - 1) selectTask(ids[idx + 1]);
+}
+
+function selectTask(taskId) {
+  currentTaskId = taskId;
+  document.getElementById('taskSelect').value = taskId;
+  const score = taskScores[taskId];
+  renderAutoScore(score?.autoScore);
+  renderHumanScore(score?.humanScore);
+  loadTaskFiles(taskId);
+}
+
+function renderAutoScore(auto) {
+  const totalEl = document.getElementById('autoTotal');
+  const dimsEl = document.getElementById('autoDimensions');
+  if (!auto) { totalEl.textContent = '-'; dimsEl.innerHTML = ''; return; }
+  totalEl.textContent = auto.totalScore;
+  const dimMap = {
+    completeness: '功能完成度', security: '安全性', stability: '稳定性',
+    codeQuality: '代码规范度', efficiency: '效率'
+  };
+  let html = '';
+  for (const [key, info] of Object.entries(auto.dimensions || {})) {
+    const pct = info.score;
+    const cls = pct >= 80 ? 'high' : (pct >= 60 ? 'medium' : 'low');
+    html += `<div class="dimension-row">
+      <span class="dimension-name">${dimMap[key] || key}</span>
+      <div class="dimension-bar-bg"><div class="dimension-bar ${cls}" style="width:${pct}%"></div></div>
+      <span class="dimension-value">${info.score}</span>
+    </div>`;
+  }
+  dimsEl.innerHTML = html;
+}
+
+function renderHumanScore(human) {
+  const container = document.getElementById('humanDimensions');
+  container.innerHTML = '';
+  for (const dim of HUMAN_DIMS) {
+    const val = human?.dimensions?.[dim.key] || 0;
+    const row = document.createElement('div');
+    row.className = 'human-score-row';
+    let starsHtml = '';
+    for (let i = 1; i <= 5; i++) {
+      starsHtml += `<span class="star ${i <= val ? 'active' : ''}" data-dim="${dim.key}" data-val="${i}" onclick="setStar('${dim.key}', ${i})">★</span>`;
+    }
+    row.innerHTML = `<span class="label">${dim.label}</span>
+      <div class="stars">${starsHtml}<span class="star-value" id="star-${dim.key}">${val}/5</span></div>`;
+    container.appendChild(row);
+  }
+  document.getElementById('notes').value = human?.notes || '';
+}
+
+function setStar(dim, val) {
+  const stars = document.querySelectorAll(`[data-dim="${dim}"]`);
+  stars.forEach(s => s.classList.toggle('active', parseInt(s.dataset.val) <= val));
+  document.getElementById(`star-${dim}`).textContent = val + '/5';
+}
+
+function getHumanScore() {
+  const dims = {};
+  for (const dim of HUMAN_DIMS) {
+    const active = document.querySelectorAll(`[data-dim="${dim.key}"].active`);
+    dims[dim.key] = active.length;
+  }
+  return { dimensions: dims, notes: document.getElementById('notes').value };
+}
+
+async function saveScore() {
+  try {
+    await fetch(`/api/rounds/${currentRound}/scores/${currentTaskId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(getHumanScore())
+    });
+    taskScores[currentTaskId].humanScore = getHumanScore();
+    showToast('已保存');
+  } catch (e) { showToast('保存失败'); }
+}
+
+function resetScore() {
+  renderHumanScore(null);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+async function loadTaskFiles(taskId) {
+  try {
+    const res = await fetch(`/api/rounds/${currentRound}/tasks/${taskId}/files`);
+    const files = await res.json();
+    taskFiles[taskId] = files;
+    if (files.length === 0) {
+      document.getElementById('fileTreeView').innerHTML = '<div style="padding:12px;color:var(--text-secondary);">该任务无产出文件（可能已被系统清理）</div>';
+      return;
+    }
+    renderFileTree(files);
+    detectPreviewType(files);
+  } catch (e) { document.getElementById('fileTreeView').innerHTML = '<div style="padding:12px;color:var(--text-secondary);">加载失败</div>'; }
+}
+
+function detectPreviewType(files) {
+  const names = files.map(f => f.name);
+  const htmlTab = document.querySelector('[data-tab="html"]');
+  const hasHtml = names.some(n => n.endsWith('.html'));
+  const hasPkgJson = names.some(n => n === 'package.json');
+  if (hasHtml && !hasPkgJson) {
+    htmlTab.classList.remove('hidden');
+  } else {
+    htmlTab.classList.add('hidden');
+  }
+}
+
+function renderFileTree(files) {
+  const tree = buildTree(files);
+  const container = document.getElementById('fileTreeView');
+  container.innerHTML = '';
+  renderNode(tree, container, 0);
+}
+
+function buildTree(files) {
+  const root = {};
+  for (const f of files) {
+    const parts = f.path.split('/');
+    let cur = root;
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (i === parts.length - 1) {
+        cur[p] = { ...f, isFile: true };
+      } else {
+        cur[p] = cur[p] || {};
+        cur = cur[p];
+      }
+    }
+  }
+  return root;
+}
+
+function renderNode(node, container, depth) {
+  const entries = Object.entries(node).sort((a, b) => {
+    const aFile = a[1].isFile;
+    const bFile = b[1].isFile;
+    if (aFile !== bFile) return aFile ? 1 : -1;
+    return a[0].localeCompare(b[0]);
+  });
+  for (const [name, info] of entries) {
+    if (info.isFile) {
+      const el = document.createElement('div');
+      el.className = 'file';
+      el.innerHTML = `<span class="file-icon ${getFileIconClass(info.ext)}">${getFileIcon(info.ext)}</span>${name}`;
+      el.onclick = () => selectFile(info.path);
+      container.appendChild(el);
+    } else {
+      const folder = document.createElement('div');
+      folder.innerHTML = `<div class="folder" onclick="toggleFolder(this)"><span class="toggle">▼</span> <span class="name">${name}/</span></div>`;
+      const childContainer = document.createElement('div');
+      childContainer.style.paddingLeft = '12px';
+      renderNode(info, childContainer, depth + 1);
+      folder.appendChild(childContainer);
+      container.appendChild(folder);
+    }
+  }
+}
+
+function toggleFolder(el) {
+  const child = el.nextElementSibling;
+  const toggle = el.querySelector('.toggle');
+  if (child) {
+    child.style.display = child.style.display === 'none' ? 'block' : 'none';
+    toggle.textContent = child.style.display === 'none' ? '▶' : '▼';
+  }
+}
+
+function getFileIcon(ext) {
+  const map = { '.js': '📜', '.py': '🐍', '.html': '🌐', '.css': '🎨', '.md': '📝', '.json': '📋', '.ts': '📘', '.sh': '⚡' };
+  return map[ext] || '📄';
+}
+
+function getFileIconClass(ext) {
+  const map = { '.js': 'js', '.py': 'py', '.html': 'html', '.css': 'css', '.md': 'md', '.json': 'json' };
+  return map[ext] || '';
+}
+
+async function selectFile(filePath) {
+  selectedFile = filePath;
+  document.querySelectorAll('.file').forEach(f => f.classList.remove('active'));
+  event.target.closest('.file')?.classList.add('active');
+  try {
+    const res = await fetch(`/api/rounds/${currentRound}/tasks/${currentTaskId}/file?p=${encodeURIComponent(filePath)}`);
+    const data = await res.json();
+    if (data.binary) {
+      showCodeView('二进制文件，无法预览');
+      return;
+    }
+    const ext = filePath.split('.').pop();
+    showCodeView(highlightCode(data.content, ext));
+    if (filePath.endsWith('.html')) {
+      showHtmlPreview(data.content);
+    }
+  } catch (e) { showCodeView('加载失败'); }
+}
+
+function showCodeView(html) {
+  document.getElementById('fileTreeView').style.display = 'none';
+  document.getElementById('codeView').style.display = 'block';
+  document.getElementById('htmlView').style.display = 'none';
+  document.getElementById('codeView').innerHTML = html;
+}
+
+function showHtmlPreview(content) {
+  const clean = content.replace(/fetch\(/g, '// fetch(').replace(/XMLHttpRequest/g, '// XMLHttpRequest');
+  document.getElementById('htmlView').innerHTML = `<iframe sandbox="allow-scripts" srcdoc="${clean.replace(/"/g, '&quot;')}" style="width:100%;min-height:400px;border:none;"></iframe>`;
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.preview-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`[data-tab="${tab}"]`)?.classList.add('active');
+  if (tab === 'files') {
+    document.getElementById('fileTreeView').style.display = 'block';
+    document.getElementById('codeView').style.display = 'none';
+    document.getElementById('htmlView').style.display = 'none';
+  } else if (tab === 'html') {
+    document.getElementById('fileTreeView').style.display = 'none';
+    document.getElementById('codeView').style.display = 'none';
+    document.getElementById('htmlView').style.display = 'block';
+  }
+}
+
+function highlightCode(code, lang) {
+  let escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  escaped = escaped.replace(/('.*?'|".*?"|`.*?`)/g, '<span class="hl-string">$1</span>');
+  escaped = escaped.replace(/(\/\/.*)/g, '<span class="hl-comment">$1</span>');
+  escaped = escaped.replace(/\b(function|const|let|var|return|if|else|for|while|import|export|from|require|class|extends|async|await|try|catch|throw|new|this|true|false|null|undefined)\b/g, '<span class="hl-keyword">$1</span>');
+  escaped = escaped.replace(/\b(\d+\.?\d*)\b/g, '<span class="hl-number">$1</span>');
+  const lines = escaped.split('\n');
+  return lines.map((line, i) => `<span class="line-num">${i + 1}</span>${line}`).join('\n');
+}
+
+async function loadHistory() {
+  try {
+    const res = await fetch('/api/scores/history');
+    const data = await res.json();
+    const container = document.getElementById('historyList');
+    container.innerHTML = data.map(h => `
+      <div class="history-item">
+        <span>${h.round}</span>
+        <span>平均 ${h.avgScore} 分 · ${h.taskCount} 任务 · ${h.date}</span>
+      </div>
+    `).join('');
+  } catch (e) { document.getElementById('historyList').innerHTML = '暂无历史'; }
+}
+
+init();
+</script>
+</body>
+</html>

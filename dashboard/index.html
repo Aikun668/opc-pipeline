@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OPC Pipeline Task History</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #1a1a2e;
+      color: #eaeaea;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+    }
+    h1 { font-size: 24px; margin-bottom: 20px; color: #00d4ff; }
+    h2 { font-size: 18px; margin: 20px 0 10px; color: #a0a0b0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
+    .card {
+      background: #16213e;
+      border-radius: 8px;
+      padding: 16px;
+      border: 1px solid #0f3460;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #0f3460; }
+    th { color: #a0a0b0; font-weight: 500; }
+    .status-success { color: #4ade80; }
+    .status-failed { color: #f87171; }
+    .status-running { color: #fbbf24; }
+    .filters { margin-bottom: 12px; }
+    .filters button {
+      background: #0f3460;
+      border: none;
+      color: #eaeaea;
+      padding: 6px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 8px;
+      font-size: 13px;
+    }
+    .filters button.active { background: #00d4ff; color: #1a1a2e; }
+    .chart-container { height: 300px; }
+    .status-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background: #0f3460;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    .status-card .phase { color: #00d4ff; font-weight: 500; }
+    .live-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: #4ade80;
+      border-radius: 50%;
+      margin-right: 6px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+  </style>
+</head>
+<body>
+  <h1>OPC Pipeline Task History</h1>
+
+  <div class="grid">
+    <div class="card">
+      <h2>任务列表</h2>
+      <div class="filters">
+        <button class="active" onclick="filterTasks('all')">全部</button>
+        <button onclick="filterTasks('success')">成功</button>
+        <button onclick="filterTasks('failed')">失败</button>
+        <button onclick="filterTasks('running')">运行中</button>
+      </div>
+      <table>
+        <thead>
+          <tr><th>ID</th><th>类型</th><th>状态</th><th>耗时(ms)</th><th>成本</th></tr>
+        </thead>
+        <tbody id="taskTable"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>阶段健康度</h2>
+      <table>
+        <thead>
+          <tr><th>阶段</th><th>平均耗时(ms)</th><th>成功率</th></tr>
+        </thead>
+        <tbody id="phaseTable"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>成本趋势</h2>
+      <div class="chart-container">
+        <canvas id="costChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>实时状态 <span class="live-indicator"></span></h2>
+      <div id="statusContainer">
+        <div class="status-card">加载中...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allTasks = [];
+    let costChart = null;
+
+    async function fetchTasks() {
+      const res = await fetch('/api/tasks');
+      allTasks = await res.json();
+      renderTasks(allTasks);
+    }
+
+    function renderTasks(tasks) {
+      const tbody = document.getElementById('taskTable');
+      tbody.innerHTML = tasks.map(t => {
+        const statusClass = `status-${t.status}`;
+        return `<tr>
+          <td>${t.id}</td>
+          <td>${t.type}</td>
+          <td><span class="${statusClass}">${t.status}</span></td>
+          <td>${t.duration}</td>
+          <td>¥${t.cost.toFixed(4)}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function filterTasks(status) {
+      document.querySelectorAll('.filters button').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      const filtered = status === 'all' ? allTasks : allTasks.filter(t => t.status === status);
+      renderTasks(filtered);
+    }
+
+    async function fetchPhases() {
+      const res = await fetch('/api/phases');
+      const phases = await res.json();
+      const tbody = document.getElementById('phaseTable');
+      tbody.innerHTML = phases.map(p => `
+        <tr>
+          <td>${p.phase}</td>
+          <td>${p.avg_duration_ms}</td>
+          <td>${(p.success_rate * 100).toFixed(1)}%</td>
+        </tr>
+      `).join('');
+    }
+
+    async function fetchCosts() {
+      const res = await fetch('/api/costs');
+      const costs = await res.json();
+      const ctx = document.getElementById('costChart').getContext('2d');
+      if (costChart) costChart.destroy();
+      costChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: costs.map((c, i) => `Task ${i + 1}`),
+          datasets: [{
+            label: '成本 (¥)',
+            data: costs.map(c => c.cost),
+            borderColor: '#00d4ff',
+            backgroundColor: 'rgba(0, 212, 255, 0.1)',
+            tension: 0.3,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: '#0f3460' },
+              ticks: { color: '#a0a0b0' }
+            },
+            x: {
+              grid: { display: false },
+              ticks: { color: '#a0a0b0' }
+            }
+          }
+        }
+      });
+    }
+
+    async function fetchStatus() {
+      const res = await fetch('/api/status');
+      const data = await res.json();
+      const container = document.getElementById('statusContainer');
+      if (data.count === 0) {
+        container.innerHTML = '<div class="status-card">当前无运行中任务</div>';
+      } else {
+        container.innerHTML = data.running.map(t => `
+          <div class="status-card">
+            <div>
+              <div>${t.taskId}</div>
+              <div class="phase">当前阶段: ${t.currentPhase}</div>
+            </div>
+            <div>运行中</div>
+          </div>
+        `).join('');
+      }
+    }
+
+    async function init() {
+      await fetchTasks();
+      await fetchPhases();
+      await fetchCosts();
+      await fetchStatus();
+    }
+
+    init();
+    setInterval(fetchStatus, 5000);
+  </script>
+</body>
+</html>

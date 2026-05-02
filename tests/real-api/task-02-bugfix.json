@@ -1,0 +1,8 @@
+{
+  "id": "TRIAL-002",
+  "type": "bugfix",
+  "description": "修复以下 JavaScript 函数的除零错误：function divide(a, b) { return a / b; }。要求：1) 当 b 为 0 时返回 null 并打印警告；2) 添加参数类型检查；3) 提供修复后的完整代码",
+  "options": {
+    "projectRoot": "/tmp/trial-002"
+  }
+}

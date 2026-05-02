@@ -1,0 +1,52 @@
+[
+  {
+    "id": "BENCH-001",
+    "description": "新增一个 REST API 路由 /api/users/:id/profile，返回用户 profile 信息（包含 name, email, avatarUrl），要求有参数校验和 404 处理",
+    "type": "feature"
+  },
+  {
+    "id": "BENCH-002",
+    "description": "修复用户登录接口的 SQL 注入漏洞：当前直接拼接 SQL 字符串，改为参数化查询",
+    "type": "bugfix"
+  },
+  {
+    "id": "BENCH-003",
+    "description": "重构订单处理模块：将 200 行的 processOrder() 函数拆分为 validateOrder、calculatePrice、applyDiscount、saveOrder 四个独立函数",
+    "type": "refactor"
+  },
+  {
+    "id": "BENCH-004",
+    "description": "为购物车模块补充单元测试：覆盖 addItem、removeItem、calculateTotal 三个方法，要求达到 80% 以上分支覆盖",
+    "type": "feature"
+  },
+  {
+    "id": "BENCH-005",
+    "description": "修复文件上传功能的内存泄漏：上传大文件时 stream 未正确关闭，导致进程内存持续增长",
+    "type": "bugfix"
+  },
+  {
+    "id": "BENCH-006",
+    "description": "新增配置文件热加载功能：监听 config/app.yaml 变化，变更后自动重新加载配置而不重启服务",
+    "type": "feature"
+  },
+  {
+    "id": "BENCH-007",
+    "description": "重构错误处理中间件：统一 HTTP 错误响应格式为 { code, message, details, timestamp }，替换当前散落的多种格式",
+    "type": "refactor"
+  },
+  {
+    "id": "BENCH-008",
+    "description": "修复 JWT Token 验证的时区问题：当前使用本地时间验证 exp，在跨时区部署时导致 Token 提前失效",
+    "type": "bugfix"
+  },
+  {
+    "id": "BENCH-009",
+    "description": "新增数据导出功能：支持将用户列表导出为 CSV/Excel 格式，包含分页和字段筛选，导出进度实时推送",
+    "type": "feature"
+  },
+  {
+    "id": "BENCH-010",
+    "description": "重构数据库连接池管理：将硬编码的连接数改为根据 CPU 核心数自动计算，添加连接健康检查和自动重连机制",
+    "type": "refactor"
+  }
+]

@@ -1,0 +1,21 @@
+{
+  "name": "opc-pipeline",
+  "version": "1.0.0",
+  "description": "一个基于 OpenClaw 的自主编码、审核、测试和交付系统。",
+  "main": "circuit-breaker.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dashboard": "node dashboard/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.15.0",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1"
+  }
+}

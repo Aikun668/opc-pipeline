@@ -1,0 +1,8 @@
+{
+  "id": "TRIAL-003",
+  "type": "refactor",
+  "description": "将以下 100 行的 processUserData 函数拆分为 3 个子函数：原函数包含数据验证、数据转换、数据保存三个逻辑块。要求：1) 每个子函数职责单一；2) 保持原有功能不变；3) 提供重构后的代码结构",
+  "options": {
+    "projectRoot": "/tmp/trial-003"
+  }
+}

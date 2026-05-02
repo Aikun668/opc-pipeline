@@ -1,0 +1,16 @@
+# 依赖
+node_modules/
+
+# 运行时数据（不应进版本库）
+var/pipe/
+state/
+var/archive/cost-*.json
+var/benchmark/
+var/real-api-trial/
+var/queue/
+
+# 环境变量
+.env
+
+# 日志
+*.log

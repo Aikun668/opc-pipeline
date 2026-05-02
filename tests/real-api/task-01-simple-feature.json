@@ -1,0 +1,8 @@
+{
+  "id": "TRIAL-001",
+  "type": "feature",
+  "description": "实现一个 isPalindrome 函数，判断字符串是否为回文。要求：1) 忽略大小写和非字母数字字符；2) 提供 3 个测试用例；3) 使用 JavaScript 实现",
+  "options": {
+    "projectRoot": "/tmp/trial-001"
+  }
+}

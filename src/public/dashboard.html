@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OPC Pipeline 实时监控</title>
+<style>
+:root {
+  --bg: #F5F4F0;
+  --card: #FFFFFF;
+  --text: #4A4A4A;
+  --text-secondary: #9CA3A8;
+  --divider: #E8E5DF;
+  --planning: #7B8FA1;
+  --coding: #8DA290;
+  --review: #B4A4B7;
+  --testing: #C9A88C;
+  --delivery: #9CA3A8;
+  --success: #8DA290;
+  --error: #C48B8B;
+  --warning: #C9B88C;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  padding: 24px;
+}
+.header {
+  margin-bottom: 24px;
+}
+.header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.header .meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.task-card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 32px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  border: 1px solid var(--divider);
+}
+.task-header {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--divider);
+}
+.phase-row {
+  display: flex;
+  align-items: center;
+  margin: 8px 0;
+  font-size: 14px;
+}
+.phase-name {
+  font-weight: 600;
+  width: 100px;
+  flex-shrink: 0;
+}
+.phase-name.planning { color: var(--planning); }
+.phase-name.coding { color: var(--coding); }
+.phase-name.review { color: var(--review); }
+.phase-name.testing { color: var(--testing); }
+.phase-name.delivery { color: var(--delivery); }
+.phase-status {
+  margin-left: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.phase-status.done { color: var(--success); }
+.phase-status.error { color: var(--error); }
+.phase-status.retry { color: var(--warning); }
+.substep-row {
+  margin: 4px 0 4px 24px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding-left: 12px;
+  border-left: 2px solid var(--divider);
+}
+.task-footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.task-footer.running {
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.history-section {
+  margin-top: 40px;
+}
+.history-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-secondary);
+}
+.round-item {
+  background: var(--card);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  border: 1px solid var(--divider);
+  font-size: 13px;
+}
+.round-item .round-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+.round-item .round-header:hover {
+  opacity: 0.8;
+}
+.round-item .label {
+  font-weight: 600;
+}
+.round-item .stats {
+  color: var(--text-secondary);
+}
+.round-item .expand-btn {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-left: 8px;
+}
+.round-detail {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
+  display: none;
+}
+.round-detail.active {
+  display: block;
+}
+.round-info-bar {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  padding: 8px;
+  background: var(--bg);
+  border-radius: 6px;
+}
+.replay-task {
+  margin-bottom: 16px;
+}
+.replay-task-header {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--divider);
+}
+.replay-event {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 2px 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--divider);
+}
+.replay-event .ts {
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin-right: 8px;
+}
+.status-icon {
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+}
+.log-panel {
+  background: #1a1a1a;
+  color: #d4d4d4;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 12px;
+  border-radius: 6px;
+  margin-top: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.log-entry { white-space: pre-wrap; word-break: break-all; }
+.log-entry .ts { color: #6a9955; margin-right: 8px; }
+.log-entry.info { color: #d4d4d4; }
+.log-entry.warn { color: #dcdcaa; }
+.log-entry.error { color: #f48771; }
+.log-entry .msg { color: inherit; }
+</style>
+</head>
+<body>
+  <div class="header">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+    <h1>OPC Pipeline</h1>
+    <a href="/scoring" style="color:var(--text-secondary);text-decoration:none;font-size:13px;">质量评分 →</a>
+  </div>
+  <div class="meta">状态: <span id="conn-status">连接中...</span> · <span id="mode">-</span></div>
+</div>
+<div id="tasks"></div>
+
+<div class="history-section">
+  <div class="history-title">─── 历史轮次 ───</div>
+  <div id="rounds"></div>
+</div>
+
+<script>
+const tasks = {};
+const connStatus = document.getElementById('conn-status');
+const modeEl = document.getElementById('mode');
+const tasksContainer = document.getElementById('tasks');
+const roundsContainer = document.getElementById('rounds');
+
+function formatMs(ms) {
+  if (ms < 1000) return ms + 'ms';
+  return (ms / 1000).toFixed(1) + 's';
+}
+
+function getPhaseClass(phase) {
+  const map = { planning: 'planning', coding: 'coding', review: 'review', testing: 'testing', delivery: 'delivery' };
+  return map[phase] || '';
+}
+
+function renderTask(taskId) {
+  const t = tasks[taskId];
+  if (!t) return;
+  let existing = document.getElementById('card-' + taskId);
+  if (!existing) {
+    existing = document.createElement('div');
+    existing.id = 'card-' + taskId;
+    existing.className = 'task-card';
+    tasksContainer.prepend(existing);
+  }
+  const phases = ['planning', 'coding', 'review', 'testing', 'delivery'];
+  let html = `<div class="task-header">═══════ ${taskId}${t.taskType ? ' · ' + t.taskType : ''} ═══════</div>`;
+  for (const phase of phases) {
+    const p = t.phases[phase];
+    if (!p) continue;
+    let statusIcon = '⏳';
+    let statusClass = '';
+    let statusText = '进行中...';
+    if (p.status === 'done') { statusIcon = '✅'; statusClass = 'done'; statusText = formatMs(p.durationMs) + (p.cost ? ' · ¥' + p.cost.toFixed(4) : ''); }
+    if (p.status === 'error') { statusIcon = '❌'; statusClass = 'error'; statusText = '失败'; }
+    if (p.status === 'retry') { statusIcon = '⚠'; statusClass = 'retry'; statusText = '重试 ' + p.attempt + ' 次'; }
+    html += `<div class="phase-row"><span class="phase-name ${getPhaseClass(phase)}">${phase.charAt(0).toUpperCase() + phase.slice(1)}</span><span class="phase-status ${statusClass}">${statusIcon} ${statusText}</span></div>`;
+    if (p.substeps) {
+      for (const s of p.substeps) {
+        html += `<div class="substep-row">${s.label}: ${s.status}${s.detail ? ' (' + s.detail + ')' : ''}</div>`;
+      }
+    }
+  }
+  const isRunning = !t.completed && !t.failed;
+  const footerClass = isRunning ? 'task-footer running' : 'task-footer';
+  const footerText = t.failed ? `❌ 失败 · ${t.error || ''}` : (t.completed ? `✅ 已完成 · ${formatMs(t.totalDuration || 0)}` : `运行中 · 已耗时 ${formatMs(Date.now() - t.startTime)}`);
+  html += `<div class="${footerClass}">${footerText}${t.totalCost ? ' · 累计 ¥' + t.totalCost.toFixed(4) : ''}</div>`;
+  if (t.logs && t.logs.length > 0) {
+    html += '<div class="log-panel">';
+    for (const log of t.logs) {
+      const time = new Date(log.ts).toLocaleTimeString();
+      html += `<div class="log-entry ${log.level}"><span class="ts">${time}</span><span class="msg">${log.message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span></div>`;
+    }
+    html += '</div>';
+  }
+  existing.innerHTML = html;
+  if (isRunning) existing.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function handleEvent(data) {
+  if (!data.type) return;
+    if (data.type === 'task:created') {
+    tasks[data.taskId] = { taskId: data.taskId, taskType: data.taskType, description: data.description, phases: {}, logs: [], startTime: Date.now() };
+    renderTask(data.taskId);
+  }
+  if (data.type === 'phase:start') {
+    const t = tasks[data.taskId];
+    if (t) { t.phases[data.phase] = { status: 'running', startTime: Date.now(), substeps: [] }; renderTask(data.taskId); }
+  }
+  if (data.type === 'phase:end') {
+    const t = tasks[data.taskId];
+    if (t && t.phases[data.phase]) { t.phases[data.phase].status = 'done'; t.phases[data.phase].durationMs = data.durationMs; t.phases[data.phase].cost = data.cost; renderTask(data.taskId); }
+  }
+  if (data.type === 'phase:retry') {
+    const t = tasks[data.taskId];
+    if (t && t.phases[data.phase]) { t.phases[data.phase].status = 'retry'; t.phases[data.phase].attempt = data.attempt; renderTask(data.taskId); }
+  }
+  if (data.type === 'substep') {
+    const t = tasks[data.taskId];
+    if (t && t.phases[data.phase]) { t.phases[data.phase].substeps.push({ label: data.label, status: data.status, detail: data.detail }); renderTask(data.taskId); }
+  }
+  if (data.type === 'task:completed') {
+    const t = tasks[data.taskId];
+    if (t) { t.completed = true; t.totalDuration = Date.now() - t.startTime; renderTask(data.taskId); }
+  }
+  if (data.type === 'task:failed') {
+    const t = tasks[data.taskId];
+    if (t) { t.failed = true; t.error = data.error; renderTask(data.taskId); }
+  }
+  if (data.type === 'log') {
+    const t = tasks[data.taskId];
+    if (t) { t.logs.push({ level: data.level, message: data.message, ts: data.ts }); renderTask(data.taskId); }
+  }
+  if (data.type === 'round:end') {
+    loadHistory();
+  }
+}
+
+function connectSSE() {
+  const es = new EventSource('/events');
+  es.onopen = () => { connStatus.textContent = '已连接'; };
+  es.onmessage = (e) => {
+    try { handleEvent(JSON.parse(e.data)); } catch (err) {}
+  };
+  es.onerror = () => { connStatus.textContent = '断开'; };
+}
+
+async function loadRounds() {
+  try {
+    const res = await fetch('/api/rounds');
+    const rounds = await res.json();
+    if (rounds.length === 0) {
+      roundsContainer.innerHTML = '<div class="round-item">暂无压测数据，请先运行压测</div>';
+      return;
+    }
+    roundsContainer.innerHTML = rounds.slice(-3).reverse().map(r => `
+      <div class="round-item" data-round="${r.roundId}">
+        <div class="round-header" onclick="toggleRound('${r.roundId}')">
+          <span>
+            <span class="label">${r.roundId}</span>
+            <span class="stats">${r.date} · ${r.mode} · ${r.taskCount}题 · ${r.successCount}/${r.taskCount}成功</span>
+          </span>
+          <span class="expand-btn" id="btn-${r.roundId}">[展开查看]</span>
+        </div>
+        <div class="round-detail" id="detail-${r.roundId}">
+          <div class="round-info-bar">加载中...</div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) { roundsContainer.innerHTML = '<div class="round-item">加载失败</div>'; }
+}
+
+function toggleRound(roundId) {
+  const detail = document.getElementById('detail-' + roundId);
+  const btn = document.getElementById('btn-' + roundId);
+  if (detail.classList.contains('active')) {
+    detail.classList.remove('active');
+    btn.textContent = '[展开查看]';
+  } else {
+    detail.classList.add('active');
+    btn.textContent = '[收起]';
+    loadRoundEvents(roundId);
+  }
+}
+
+async function loadRoundEvents(roundId) {
+  const detail = document.getElementById('detail-' + roundId);
+  try {
+    const res = await fetch(`/api/rounds/${roundId}/events`);
+    const events = await res.json();
+    if (events.length === 0) {
+      detail.innerHTML = '<div class="round-info-bar">该轮次无事件记录</div>';
+      return;
+    }
+
+    const roundRes = await fetch(`/api/rounds/${roundId}`);
+    const roundMeta = await roundRes.json();
+
+    const tasks = {};
+    for (const ev of events) {
+      if (ev.type === 'task:created') {
+        tasks[ev.taskId] = { taskId: ev.taskId, events: [] };
+      }
+      if (tasks[ev.taskId]) {
+        tasks[ev.taskId].events.push(ev);
+      }
+    }
+
+    let html = `<div class="round-info-bar">${roundMeta.roundId} · ${roundMeta.date} · ${roundMeta.taskCount || '?'} 任务</div>`;
+    for (const taskId of Object.keys(tasks)) {
+      const task = tasks[taskId];
+      html += `<div class="replay-task"><div class="replay-task-header">${taskId}</div>`;
+      for (const ev of task.events) {
+        const time = new Date(ev.ts).toLocaleTimeString();
+        let desc = ev.type;
+        if (ev.type === 'log') desc = ev.message || 'log';
+        if (ev.phase) desc += ` · ${ev.phase}`;
+        if (ev.durationMs) desc += ` · ${ev.durationMs}ms`;
+        if (ev.attempt) desc += ` · 重试${ev.attempt}`;
+        html += `<div class="replay-event"><span class="ts">${time}</span>${desc}</div>`;
+      }
+      html += '</div>';
+    }
+    detail.innerHTML = html;
+  } catch (e) {
+    detail.innerHTML = '<div class="round-info-bar">加载失败: ' + e.message + '</div>';
+  }
+}
+
+modeEl.textContent = (window.location.search.includes('mock') ? 'mock' : 'api') + ' · deepseek';
+connectSSE();
+loadRounds();
+</script>
+</body>
+</html>
