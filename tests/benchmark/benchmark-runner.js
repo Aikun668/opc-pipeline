@@ -9,7 +9,7 @@ const path = require('path');
 const os = require('os');
 
 // 在 dotenv 加载前设置 OPC_SPAWN_MODE，防止 .env 文件覆盖
-const spawnMode = process.env.OPC_SPAWN_MODE || 'mock';
+const spawnMode = process.env.OPC_SPAWN_MODE || 'api';
 process.env.OPC_SPAWN_MODE = spawnMode;
 
 const ROOT = path.join(__dirname, '..', '..');
@@ -18,7 +18,7 @@ const BENCHMARK_DIR = path.join(ROOT, 'var', 'benchmark');
 const args = process.argv.slice(2);
 const tasksArgIndex = args.indexOf('--tasks');
 const TASKS_PATH = tasksArgIndex !== -1
-  ? path.join(__dirname, args[tasksArgIndex + 1])
+  ? path.resolve(args[tasksArgIndex + 1])
   : path.join(__dirname, 'tasks.json');
 
 const noDashboard = args.includes('--no-dashboard');
@@ -135,6 +135,11 @@ async function runBenchmark() {
 
     results.push(result);
     archiver.archiveTask(roundId, task.id, taskDir, result);
+
+    if (tasks.indexOf(task) < tasks.length - 1) {
+      console.log('  [冷却] 等待 3s...');
+      await new Promise(r => setTimeout(r, 3000));
+    }
   }
 
   const reportPath = generateReport(results, tasks, roundId);

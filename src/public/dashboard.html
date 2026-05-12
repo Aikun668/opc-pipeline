@@ -6,313 +6,1023 @@
 <title>OPC Pipeline 实时监控</title>
 <style>
 :root {
-  --bg: #F5F4F0;
-  --card: #FFFFFF;
-  --text: #4A4A4A;
-  --text-secondary: #9CA3A8;
-  --divider: #E8E5DF;
-  --planning: #7B8FA1;
-  --coding: #8DA290;
-  --review: #B4A4B7;
-  --testing: #C9A88C;
-  --delivery: #9CA3A8;
-  --success: #8DA290;
-  --error: #C48B8B;
-  --warning: #C9B88C;
+  --bg: #0d1117;           /* surface-0: 最深底层 */
+  --card: #161b22;         /* surface-1: 卡片/面板 */
+  --surface2: #1c2128;     /* surface-2: 悬浮面板 */
+  --border: #30363d;
+  --border-hairline: rgba(255,255,255,0.06);
+  --text: #c9d1d9;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --success: #3fb950;
+  --warning: #d29922;
+  --error: #f85149;
+  --error-bg: rgba(248,81,73,0.12);
+  --phase-planning: #58a6ff;
+  --phase-coding: #3fb950;
+  --phase-review: #bc8cff;
+  --phase-testing: #d29922;
+  --phase-delivery: #79c0ff;
+  --radius: 8px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  --sidebar-bg: #161b22;
+}
+[data-theme="light"] {
+  --bg: #ffffff;
+  --card: #f6f8fa;
+  --border: #d0d7de;
+  --text: #1f2328;
+  --text-muted: #656d76;
+  --accent: #0969da;
+  --success: #1a7f37;
+  --warning: #9a6700;
+  --error: #cf222e;
+  --phase-planning: #0969da;
+  --phase-coding: #1a7f37;
+  --phase-review: #8250df;
+  --phase-testing: #9a6700;
+  --phase-delivery: #0969da;
+  --shadow: 0 1px 3px rgba(0,0,0,0.1);
+  --sidebar-bg: #f6f8fa;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
-  line-height: 1.5;
-  padding: 24px;
-}
-.header {
-  margin-bottom: 24px;
-}
-.header h1 {
-  font-size: 20px;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-.header .meta {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-.task-card {
-  background: var(--card);
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 32px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-  border: 1px solid var(--divider);
-}
-.task-header {
   font-size: 15px;
+  line-height: 1.6;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  padding: 16px;
+  overflow-y: auto;
+  max-height: 100vh;
+}
+.sidebar-header {
+  font-size: 14px;
   font-weight: 600;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 2px solid var(--divider);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
-.phase-row {
+.sidebar-header a { color: var(--text-muted); text-decoration: none; font-size: 12px; }
+.task-list-item {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  margin-bottom: 8px;
+  border-left: 3px solid transparent;
+  transition: all 0.15s ease;
+}
+.task-list-item:hover { background: var(--card); }
+.task-list-item.active {
+  background: var(--card);
+  border-left-color: var(--accent);
+}
+.task-row {
   display: flex;
   align-items: center;
-  margin: 8px 0;
-  font-size: 14px;
+  gap: 8px;
 }
-.phase-name {
-  font-weight: 600;
-  width: 100px;
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
   flex-shrink: 0;
 }
-.phase-name.planning { color: var(--planning); }
-.phase-name.coding { color: var(--coding); }
-.phase-name.review { color: var(--review); }
-.phase-name.testing { color: var(--testing); }
-.phase-name.delivery { color: var(--delivery); }
-.phase-status {
-  margin-left: 8px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-.phase-status.done { color: var(--success); }
-.phase-status.error { color: var(--error); }
-.phase-status.retry { color: var(--warning); }
-.substep-row {
-  margin: 4px 0 4px 24px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  padding-left: 12px;
-  border-left: 2px solid var(--divider);
-}
-.task-footer {
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid var(--divider);
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-.task-footer.running {
-  animation: pulse 2s ease-in-out infinite;
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-.history-section {
-  margin-top: 40px;
-}
-.history-title {
-  font-size: 14px;
+.status-dot.running { background: var(--accent); animation: pulse 2s infinite; }
+.status-dot.completed { background: var(--success); }
+.status-dot.failed { background: var(--error); }
+.task-id {
   font-weight: 600;
-  margin-bottom: 16px;
-  color: var(--text-secondary);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
 }
+.task-grade {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--border);
+  color: var(--text-muted);
+}
+.progress-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* Main */
+.main {
+  padding: 24px;
+  overflow-y: auto;
+  max-height: 100vh;
+}
+.main-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.main-header h1 { font-size: 20px; font-weight: 600; }
+.main-header .meta {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.theme-toggle {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.theme-toggle:hover { background: var(--bg); }
+
+/* Metric Tiles */
+.metric-tiles {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.metric-tile {
+  flex: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+}
+.metric-tile .metric-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.metric-tile .metric-value {
+  font-size: 28px;
+  font-weight: 700;
+}
+.metric-tile.success .metric-value { color: var(--success); }
+.metric-tile.error .metric-value { color: var(--error); }
+
+/* Stepper */
+.stepper {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  flex: 1;
+  position: relative;
+}
+.step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  right: -50%;
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+  z-index: 0;
+}
+.step.done:not(:last-child)::after { background: var(--success); }
+.step.failed:not(:last-child)::after { background: var(--error); }
+.step-node {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  z-index: 1;
+  border: 2px solid var(--border);
+  background: var(--card);
+  color: var(--text-muted);
+}
+.step.done .step-node {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+.step.running .step-node {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  animation: pulse 2s infinite;
+}
+.step.failed .step-node {
+  background: var(--error);
+  border-color: var(--error);
+  color: #fff;
+}
+.step-label {
+  font-size: 11px;
+  margin-top: 6px;
+  color: var(--text-muted);
+}
+.step.done .step-label { color: var(--success); }
+.step.running .step-label { color: var(--accent); }
+.step.failed .step-label { color: var(--error); }
+.step-time {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.step-duration-bar {
+  width: 100%;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.step-duration-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* Log Viewer */
+.log-panel {
+  background: var(--bg);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: 'Cascadia Code', 'JetBrains Mono', 'SFMono-Regular', 'Fira Code', 'Consolas', monospace;
+  font-size: 15px;
+  line-height: 1.75;
+  padding: 16px;
+  overflow-y: auto;
+}
+.log-entry {
+  display: flex;
+  align-items: baseline;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.log-entry:last-child { border-bottom: none; }
+.log-entry .ts {
+  color: var(--text-muted);
+  font-size: 12px;
+  min-width: 70px;
+  text-align: right;
+  margin-right: 12px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+.log-entry.level-warn {
+  border-left: 2px solid var(--warning);
+  padding-left: 10px;
+}
+.log-entry.level-error {
+  border-left: 2px solid var(--error);
+  padding-left: 10px;
+}
+.log-entry .prefix-costtracker { color: #bc8cff; }
+.log-entry .prefix-phase { color: var(--accent); }
+.log-entry .prefix-error {
+  color: var(--error);
+  background: var(--error-bg);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+.log-entry .prefix-review { color: #bb9af7; }
+
+/* Cards */
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 16px;
+  margin-bottom: 16px;
+  transition: box-shadow 0.2s;
+}
+.card:hover { box-shadow: var(--shadow); }
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.card-phase-bar {
+  width: 4px;
+  height: 24px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.card-phase-bar.planning { background: var(--phase-planning); }
+.card-phase-bar.coding { background: var(--phase-coding); }
+.card-phase-bar.review { background: var(--phase-review); }
+.card-phase-bar.testing { background: var(--phase-testing); }
+.card-phase-bar.delivery { background: var(--phase-delivery); }
+.card-title { font-weight: 600; font-size: 15px; }
+.card-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.card-toggle {
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+.card-toggle.collapsed { transform: rotate(-90deg); }
+.card-body { transition: max-height 0.2s ease; }
+.card-body.collapsed { display: none; }
+
+/* Review */
+.review-chart {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.review-chart svg { flex-shrink: 0; }
+.review-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  font-size: 12px;
+}
+.review-legend-item { display: flex; align-items: center; gap: 6px; }
+.review-legend-color { width: 10px; height: 10px; border-radius: 2px; }
+.review-legend-label { color: var(--text-muted); }
+.review-legend-value { font-weight: 600; }
+.issues-list { margin-top: 12px; }
+.issue-card {
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-left: 3px solid;
+}
+.issue-card.level-A { border-left-color: var(--error); }
+.issue-card.level-B { border-left-color: var(--warning); }
+.issue-card.level-C { border-left-color: var(--accent); }
+.issue-header { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.issue-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+.issue-badge.level-A { background: rgba(248,81,73,0.15); color: var(--error); }
+.issue-badge.level-B { background: rgba(210,153,34,0.15); color: var(--warning); }
+.issue-badge.level-C { background: rgba(88,166,255,0.15); color: var(--accent); }
+.issue-category { font-size: 11px; color: var(--text-muted); text-transform: capitalize; }
+.issue-desc { font-size: 13px; margin-bottom: 4px; }
+.issue-suggestion { font-size: 12px; color: var(--text-muted); font-style: italic; }
+.no-issues { color: var(--text-muted); font-size: 13px; text-align: center; padding: 16px; }
+
+/* History */
+.history-section { margin-top: 40px; }
+.history-title { font-size: 16px; font-weight: 600; margin-bottom: 20px; color: var(--text-muted); }
 .round-item {
   background: var(--card);
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 8px;
-  border: 1px solid var(--divider);
-  font-size: 13px;
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  font-size: 15px;
+  transition: box-shadow 0.2s;
 }
+.round-item:hover { box-shadow: var(--shadow); }
 .round-item .round-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
 }
-.round-item .round-header:hover {
-  opacity: 0.8;
-}
-.round-item .label {
-  font-weight: 600;
-}
-.round-item .stats {
-  color: var(--text-secondary);
-}
-.round-item .expand-btn {
-  color: var(--text-secondary);
-  font-size: 12px;
-  margin-left: 8px;
-}
+.round-item .round-header:hover { opacity: 0.8; }
+.round-item .label { font-weight: 700; font-size: 15px; }
+.round-item .stats { color: var(--text-muted); font-size: 14px; }
+.round-item .expand-btn { color: var(--text-muted); font-size: 13px; margin-left: 8px; }
 .round-detail {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--divider);
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
   display: none;
 }
-.round-detail.active {
-  display: block;
-}
+.round-detail.active { display: block; }
 .round-info-bar {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-bottom: 12px;
-  padding: 8px;
-  background: var(--bg);
-  border-radius: 6px;
-}
-.replay-task {
-  margin-bottom: 16px;
-}
-.replay-task-header {
   font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--divider);
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-hairline);
+}
+.replay-task { margin-bottom: 24px; }
+.replay-task-header {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.replay-timeline {
+  position: relative;
+  padding-left: 24px;
+}
+.replay-timeline::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+  border-radius: 1px;
 }
 .replay-event {
-  font-size: 12px;
-  color: var(--text-secondary);
-  padding: 2px 0;
-  padding-left: 12px;
-  border-left: 2px solid var(--divider);
-}
-.replay-event .ts {
-  color: var(--text-secondary);
-  font-size: 11px;
-  margin-right: 8px;
-}
-.status-icon {
-  display: inline-block;
-  width: 16px;
-  text-align: center;
-}
-.log-panel {
-  background: #1a1a1a;
-  color: #d4d4d4;
-  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  position: relative;
   font-size: 14px;
+  color: var(--text);
+  padding: 8px 0;
   line-height: 1.6;
-  padding: 12px;
-  border-radius: 6px;
-  margin-top: 12px;
-  max-height: 300px;
-  overflow-y: auto;
 }
-.log-entry { white-space: pre-wrap; word-break: break-all; }
-.log-entry .ts { color: #6a9955; margin-right: 8px; }
-.log-entry.info { color: #d4d4d4; }
-.log-entry.warn { color: #dcdcaa; }
-.log-entry.error { color: #f48771; }
-.log-entry .msg { color: inherit; }
+.replay-event::before {
+  content: '';
+  position: absolute;
+  left: -20px;
+  top: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  border: 2px solid var(--card);
+}
+.replay-event.type-log::before { background: var(--accent); }
+.replay-event.type-phase::before { background: var(--success); }
+.replay-event.type-error::before { background: var(--error); }
+.replay-event .ts {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: 'Cascadia Code', 'JetBrains Mono', 'SFMono-Regular', monospace;
+  margin-right: 12px;
+  opacity: 0.7;
+}
+.replay-event .event-desc {
+  color: var(--text);
+}
+.replay-event .event-meta {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-left: 8px;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--text-muted);
+}
+.empty-state .indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
+  margin-right: 8px;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
 </style>
 </head>
 <body>
-  <div class="header">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-    <h1>OPC Pipeline</h1>
-    <a href="/scoring" style="color:var(--text-secondary);text-decoration:none;font-size:13px;">质量评分 →</a>
+<div class="sidebar">
+  <div class="sidebar-header">
+    <span>任务列表</span>
+    <a href="/scoring">评分 &rarr;</a>
   </div>
-  <div class="meta">状态: <span id="conn-status">连接中...</span> · <span id="mode">-</span></div>
+  <div id="sidebar-tasks"></div>
 </div>
-<div id="tasks"></div>
-
-<div class="history-section">
-  <div class="history-title">─── 历史轮次 ───</div>
-  <div id="rounds"></div>
+<div class="main">
+  <div class="main-header">
+    <div>
+      <h1>OPC Pipeline</h1>
+      <div class="meta">状态: <span id="conn-status">连接中...</span> &middot; <span id="mode">-</span></div>
+    </div>
+    <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 深色</button>
+  </div>
+  <div id="main-content">
+    <div class="empty-state">
+      <div><span class="indicator"></span>等待任务...</div>
+      <div style="margin-top:8px;font-size:12px;">SSE 连接中，收到任务后自动显示</div>
+    </div>
+  </div>
+  <div class="history-section">
+    <div class="history-title">历史轮次</div>
+    <div id="rounds"></div>
+  </div>
 </div>
 
 <script>
-const tasks = {};
+const taskStore = new Map();
+let selectedTaskId = null;
+let selectedPhase = null;
 const connStatus = document.getElementById('conn-status');
 const modeEl = document.getElementById('mode');
-const tasksContainer = document.getElementById('tasks');
+const sidebarTasks = document.getElementById('sidebar-tasks');
+const mainContent = document.getElementById('main-content');
 const roundsContainer = document.getElementById('rounds');
+
+function initTheme() {
+  const saved = localStorage.getItem('opc-theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = saved || (prefersDark ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', theme === 'dark' ? '' : 'light');
+  updateThemeBtn(theme);
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const next = current === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next === 'light' ? 'light' : '');
+  localStorage.setItem('opc-theme', next);
+  updateThemeBtn(next);
+}
+function updateThemeBtn(theme) {
+  const btn = document.getElementById('theme-toggle');
+  btn.textContent = theme === 'dark' ? '🌙 深色' : '☀️ 浅色';
+}
+initTheme();
 
 function formatMs(ms) {
   if (ms < 1000) return ms + 'ms';
   return (ms / 1000).toFixed(1) + 's';
 }
-
-function getPhaseClass(phase) {
-  const map = { planning: 'planning', coding: 'coding', review: 'review', testing: 'testing', delivery: 'delivery' };
-  return map[phase] || '';
+function formatTime(ts) {
+  return new Date(ts).toLocaleTimeString();
+}
+function getPhaseBarColor(phase) {
+  const map = { planning: 'var(--phase-planning)', coding: 'var(--phase-coding)', review: 'var(--phase-review)', testing: 'var(--phase-testing)', delivery: 'var(--phase-delivery)' };
+  return map[phase] || 'var(--accent)';
+}
+function getTaskStatus(task) {
+  if (task.failed) return 'failed';
+  if (task.completed) return 'completed';
+  return 'running';
+}
+function getTaskProgress(task) {
+  const phases = ['planning', 'coding', 'review', 'testing', 'delivery'];
+  let done = 0;
+  for (const p of phases) {
+    if (task.phases[p] && task.phases[p].status === 'done') done++;
+  }
+  return done;
 }
 
-function renderTask(taskId) {
-  const t = tasks[taskId];
-  if (!t) return;
-  let existing = document.getElementById('card-' + taskId);
-  if (!existing) {
-    existing = document.createElement('div');
-    existing.id = 'card-' + taskId;
-    existing.className = 'task-card';
-    tasksContainer.prepend(existing);
+function getPhaseReviewGrade(task) {
+  const review = task.phases?.review?.reviewData;
+  return review?.grade || null;
+}
+
+function updateSidebar() {
+  if (taskStore.size === 0) {
+    sidebarTasks.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px;">暂无任务</div>';
+    return;
   }
+  let html = '';
+  for (const [taskId, task] of taskStore) {
+    const status = getTaskStatus(task);
+    const progress = getTaskProgress(task);
+    const activeClass = taskId === selectedTaskId ? 'active' : '';
+    const grade = getPhaseReviewGrade(task);
+    html += `
+      <div class="task-list-item ${activeClass}" onclick="selectTask('${taskId}')">
+        <div class="task-row">
+          <div class="status-dot ${status}"></div>
+          <div class="task-id">${taskId}</div>
+          ${grade ? `<span class="task-grade">${grade}</span>` : ''}
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:${(progress / 5) * 100}%"></div>
+        </div>
+      </div>`;
+  }
+  sidebarTasks.innerHTML = html;
+}
+
+function selectTask(taskId) {
+  selectedTaskId = taskId;
+  selectedPhase = null;
+  updateSidebar();
+  renderMain();
+}
+
+function selectPhase(phase) {
+  selectedPhase = selectedPhase === phase ? null : phase;
+  renderMain();
+}
+
+function renderMain() {
+  if (!selectedTaskId || !taskStore.has(selectedTaskId)) {
+    mainContent.innerHTML = `
+      <div class="empty-state">
+        <div><span class="indicator"></span>等待任务...</div>
+        <div style="margin-top:8px;font-size:12px;">SSE 连接中，收到任务后自动显示</div>
+      </div>`;
+    return;
+  }
+  const task = taskStore.get(selectedTaskId);
+  const status = getTaskStatus(task);
+  const totalDuration = (task.completed || task.failed) ? (task.totalDuration || 0) : (Date.now() - (task.startTime || Date.now()));
   const phases = ['planning', 'coding', 'review', 'testing', 'delivery'];
-  let html = `<div class="task-header">═══════ ${taskId}${t.taskType ? ' · ' + t.taskType : ''} ═══════</div>`;
+
+  // Metric Tiles
+  let totalCost = task.totalCost || 0;
+  let successCount = task.completed ? 1 : 0;
+  let failCount = task.failed ? 1 : 0;
+  // 跨任务统计
+  let allTotalCost = 0, allSuccess = 0, allFail = 0, allCount = 0, allDuration = 0;
+  for (const t of taskStore.values()) {
+    allCount++;
+    allTotalCost += t.totalCost || 0;
+    if (t.completed) allSuccess++;
+    if (t.failed) allFail++;
+    allDuration += (t.completed || t.failed) ? (t.totalDuration || 0) : (Date.now() - (t.startTime || Date.now()));
+  }
+
+  let html = `
+    <div class="metric-tiles">
+      <div class="metric-tile">
+        <div class="metric-label">总任务数</div>
+        <div class="metric-value">${allCount}</div>
+      </div>
+      <div class="metric-tile success">
+        <div class="metric-label">成功</div>
+        <div class="metric-value" style="color:var(--success)">${allSuccess}</div>
+      </div>
+      <div class="metric-tile error">
+        <div class="metric-label">失败</div>
+        <div class="metric-value" style="color:var(--error)">${allFail}</div>
+      </div>
+      <div class="metric-tile">
+        <div class="metric-label">总成本</div>
+        <div class="metric-value">${allTotalCost ? '¥' + allTotalCost.toFixed(4) : '-'}</div>
+      </div>
+      <div class="metric-tile">
+        <div class="metric-label">总耗时</div>
+        <div class="metric-value">${formatMs(allDuration)}</div>
+      </div>
+    </div>`;
+
+  // Stepper with duration bars
+  const phaseDurations = phases.map(ph => task.phases[ph]?.durationMs || 0);
+  const maxDuration = Math.max(...phaseDurations, 1);
+  html += '<div class="stepper">';
   for (const phase of phases) {
-    const p = t.phases[phase];
-    if (!p) continue;
+    const p = task.phases[phase];
+    let stepClass = 'pending';
+    let icon = '○';
+    let time = '';
+    let durationPct = 0;
+    if (p) {
+      if (p.status === 'done') { stepClass = 'done'; icon = '✓'; time = formatMs(p.durationMs || 0); durationPct = ((p.durationMs || 0) / maxDuration) * 100; }
+      else if (p.status === 'error') { stepClass = 'failed'; icon = '!'; }
+      else { stepClass = 'running'; icon = '●'; }
+    }
+    html += `
+      <div class="step ${stepClass}" onclick="selectPhase('${phase}')">
+        <div class="step-node">${icon}</div>
+        <div class="step-label">${phase.charAt(0).toUpperCase() + phase.slice(1)}</div>
+        ${time ? `<div class="step-time">${time}</div>` : ''}
+        <div class="step-duration-bar"><div class="step-duration-fill" style="width:${durationPct}%;background:${getPhaseBarColor(phase)}"></div></div>
+      </div>`;
+  }
+  html += '</div>';
+
+  // Review score mini card
+  if (task.reviewData) {
+    html += renderReviewMiniCard(task.reviewData);
+  }
+
+  // Preview link only for tasks with HTML output
+  if (task.hasHtml) {
+    html += `<div style="margin-bottom:16px;"><a href="/preview/latest/${task.taskId}/" target="_blank" style="color:var(--accent);text-decoration:none;font-size:14px;font-weight:600;">🔍 预览交付成果 →</a></div>`;
+  }
+
+  // Phase cards
+  for (const phase of phases) {
+    const p = task.phases[phase];
+    const hasData = !!p;
+    const isCollapsed = p?.collapsed ?? false;
+    const barColor = getPhaseBarColor(phase);
+    let statusText = '';
     let statusIcon = '⏳';
-    let statusClass = '';
-    let statusText = '进行中...';
-    if (p.status === 'done') { statusIcon = '✅'; statusClass = 'done'; statusText = formatMs(p.durationMs) + (p.cost ? ' · ¥' + p.cost.toFixed(4) : ''); }
-    if (p.status === 'error') { statusIcon = '❌'; statusClass = 'error'; statusText = '失败'; }
-    if (p.status === 'retry') { statusIcon = '⚠'; statusClass = 'retry'; statusText = '重试 ' + p.attempt + ' 次'; }
-    html += `<div class="phase-row"><span class="phase-name ${getPhaseClass(phase)}">${phase.charAt(0).toUpperCase() + phase.slice(1)}</span><span class="phase-status ${statusClass}">${statusIcon} ${statusText}</span></div>`;
-    if (p.substeps) {
-      for (const s of p.substeps) {
-        html += `<div class="substep-row">${s.label}: ${s.status}${s.detail ? ' (' + s.detail + ')' : ''}</div>`;
+    if (p) {
+      if (p.status === 'done') { statusIcon = '✓'; statusText = formatMs(p.durationMs) + (p.cost ? ' · ¥' + p.cost.toFixed(4) : ''); }
+      else if (p.status === 'error') { statusIcon = '✗'; statusText = '失败'; }
+      else if (p.status === 'retry') { statusIcon = '⚠'; statusText = '重试 ' + p.attempt + ' 次'; }
+      else { statusText = '进行中...'; }
+    }
+
+    html += `<div class="card">
+      <div class="card-header" onclick="togglePhaseCard('${phase}')">
+        <div class="card-header-left">
+          <div class="card-phase-bar ${phase}" style="background:${barColor}"></div>
+          <span class="card-title">${phase.charAt(0).toUpperCase() + phase.slice(1)}</span>
+          ${hasData ? `<span style="color:var(--text-muted);font-size:12px;">${statusIcon} ${statusText}</span>` : '<span style="color:var(--text-muted);font-size:12px;">等待中...</span>'}
+        </div>
+        <span class="card-toggle ${isCollapsed ? 'collapsed' : ''}">▼</span>
+      </div>
+      <div class="card-body ${isCollapsed ? 'collapsed' : ''}" id="phase-body-${phase}">`;
+
+    if (!hasData) {
+      html += '<div style="color:var(--text-muted);font-size:13px;font-style:italic;padding:12px 0;">等待中...</div>';
+    } else {
+      if (p.substeps && p.substeps.length > 0) {
+        for (const s of p.substeps) {
+          html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
+            <span>${s.label}: ${s.status}${s.detail ? ' (' + s.detail + ')' : ''}</span>
+            <span style="font-size:11px;color:var(--text-muted);font-family:monospace;">${formatTime(s.ts || Date.now())}</span>
+          </div>`;
+        }
+      }
+      if (phase === 'review' && p.reviewData) {
+        html += renderReviewCard(p.reviewData);
+      }
+      // Phase logs directly in card-body
+      const phaseLogs = task.logs?.filter(l => l.phase === phase) || [];
+      if (phaseLogs.length > 0) {
+        html += '<div class="log-panel" id="log-panel-' + phase + '">';
+        for (const log of phaseLogs) {
+          html += renderLogEntry(log);
+        }
+        html += '</div>';
       }
     }
+    html += '</div></div>';
   }
-  const isRunning = !t.completed && !t.failed;
-  const footerClass = isRunning ? 'task-footer running' : 'task-footer';
-  const footerText = t.failed ? `❌ 失败 · ${t.error || ''}` : (t.completed ? `✅ 已完成 · ${formatMs(t.totalDuration || 0)}` : `运行中 · 已耗时 ${formatMs(Date.now() - t.startTime)}`);
-  html += `<div class="${footerClass}">${footerText}${t.totalCost ? ' · 累计 ¥' + t.totalCost.toFixed(4) : ''}</div>`;
-  if (t.logs && t.logs.length > 0) {
-    html += '<div class="log-panel">';
-    for (const log of t.logs) {
-      const time = new Date(log.ts).toLocaleTimeString();
-      html += `<div class="log-entry ${log.level}"><span class="ts">${time}</span><span class="msg">${log.message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span></div>`;
+
+  // Global logs directly in card
+  const globalLogs = task.logs?.filter(l => !l.phase) || [];
+  if (globalLogs.length > 0) {
+    html += '<div class="card"><div class="card-header" style="cursor:default;"><div class="card-header-left"><div class="card-phase-bar" style="background:var(--text-muted)"></div><span class="card-title">系统日志</span></div></div><div class="log-panel" id="log-panel-global">';
+    for (const log of globalLogs) {
+      html += renderLogEntry(log);
     }
-    html += '</div>';
+    html += '</div></div>';
   }
-  existing.innerHTML = html;
-  if (isRunning) existing.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  mainContent.innerHTML = html;
+}
+
+function renderLogEntry(log) {
+  const time = new Date(log.ts).toLocaleTimeString();
+  let msg = (log.message || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let prefixClass = '';
+  if (/^\[CostTracker\]/.test(log.message)) prefixClass = 'prefix-costtracker';
+  else if (/^\[Phase\]/.test(log.message)) prefixClass = 'prefix-phase';
+  else if (/^\[Error\]/.test(log.message)) prefixClass = 'prefix-error';
+  else if (/^\[Review\]/.test(log.message)) prefixClass = 'prefix-review';
+  return `<div class="log-entry ${log.level || 'info'}"><span class="ts">${time}</span><span class="${prefixClass}">${msg}</span></div>`;
+}
+
+function togglePhaseCard(phase) {
+  const task = taskStore.get(selectedTaskId);
+  if (!task || !task.phases[phase]) return;
+  task.phases[phase].collapsed = !task.phases[phase].collapsed;
+  renderMain();
+}
+
+function renderReviewCard(reviewData) {
+  const scores = reviewData.scores || {};
+  const issues = reviewData.issues || [];
+  const grade = reviewData.grade || 'C';
+  const dims = [
+    { key: 'requirement_fulfillment', label: '需求满足', color: '#58a6ff' },
+    { key: 'code_quality', label: '代码质量', color: '#3fb950' },
+    { key: 'maintainability', label: '可维护性', color: '#bc8cff' },
+    { key: 'security', label: '安全性', color: '#d29922' }
+  ];
+
+  const size = 100;
+  const stroke = 8;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  let svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`;
+  let offset = 0;
+  for (const dim of dims) {
+    const val = scores[dim.key] || 0;
+    const pct = val / 100;
+    const dash = pct * circumference;
+    svg += `<circle cx="${size/2}" cy="${size/2}" r="${radius}" fill="none" stroke="${dim.color}" stroke-width="${stroke}" 
+      stroke-dasharray="${dash} ${circumference - dash}" stroke-dashoffset="${-offset}" 
+      transform="rotate(-90 ${size/2} ${size/2})"/>`;
+    offset += dash;
+  }
+  svg += `<text x="${size/2}" y="${size/2}" text-anchor="middle" dominant-baseline="central" font-size="20" font-weight="700" fill="var(--text)">${grade}</text>`;
+  svg += '</svg>';
+
+  let html = '<div class="review-chart">' + svg + '<div class="review-legend">';
+  for (const dim of dims) {
+    const val = scores[dim.key] || 0;
+    const colorClass = val > 80 ? 'var(--success)' : (val >= 60 ? 'var(--warning)' : 'var(--error)');
+    html += `<div class="review-legend-item">
+      <div class="review-legend-color" style="background:${dim.color}"></div>
+      <span class="review-legend-label">${dim.label}</span>
+      <span class="review-legend-value" style="color:${colorClass}">${val}</span>
+    </div>`;
+  }
+  html += '</div></div>';
+
+  html += '<div class="issues-list">';
+  if (issues.length === 0) {
+    html += '<div class="no-issues">未发现问题</div>';
+  } else {
+    for (const issue of issues) {
+      html += `<div class="issue-card level-${issue.level}">
+        <div class="issue-header">
+          <span class="issue-badge level-${issue.level}">${issue.level}级</span>
+          <span class="issue-category">${issue.category || ''}</span>
+          ${issue.line ? `<span style="font-size:11px;color:var(--text-muted);">行 ${issue.line}</span>` : ''}
+        </div>
+        <div class="issue-desc">${(issue.desc || '').replace(/</g, '&lt;')}</div>
+        ${issue.suggestion ? `<div class="issue-suggestion">💡 ${issue.suggestion.replace(/</g, '&lt;')}</div>` : ''}
+      </div>`;
+    }
+  }
+  html += '</div>';
+
+  return html;
+}
+
+function renderReviewMiniCard(reviewData) {
+  const grade = reviewData.grade || 'C';
+  const scores = reviewData.scores || {};
+  const issueCount = (reviewData.issues || []).length;
+  const gradeColor = grade === 'A' ? 'var(--error)' : (grade === 'B' ? 'var(--warning)' : 'var(--success)');
+  let scoreHtml = '';
+  const dims = [
+    { key: 'requirement_fulfillment', label: '需求' },
+    { key: 'code_quality', label: '质量' },
+    { key: 'maintainability', label: '维护' },
+    { key: 'security', label: '安全' }
+  ];
+  for (const dim of dims) {
+    const val = scores[dim.key] || 0;
+    scoreHtml += `<span style="font-size:11px;color:var(--text-muted);margin-right:8px;">${dim.label}: <span style="color:${val > 80 ? 'var(--success)' : (val >= 60 ? 'var(--warning)' : 'var(--error)')};font-weight:600;">${val}</span></span>`;
+  }
+  return `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:16px;">
+    <div style="width:36px;height:36px;border-radius:50%;background:${gradeColor};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;">${grade}</div>
+    <div style="flex:1;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Review 评分</div>
+      <div>${scoreHtml}</div>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);">${issueCount} 条建议</div>
+  </div>`;
+}
+
+function appendLogEntry(taskId, log) {
+  if (selectedTaskId !== taskId) return;
+  const phase = log.phase;
+  const panelId = phase ? 'log-panel-' + phase : 'log-panel-global';
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  panel.insertAdjacentHTML('beforeend', renderLogEntry(log));
+  if (!panel.classList.contains('collapsed')) {
+    panel.scrollTop = panel.scrollHeight;
+  }
 }
 
 function handleEvent(data) {
   if (!data.type) return;
-    if (data.type === 'task:created') {
-    tasks[data.taskId] = { taskId: data.taskId, taskType: data.taskType, description: data.description, phases: {}, logs: [], startTime: Date.now() };
-    renderTask(data.taskId);
+  if (data.type === 'task:created') {
+    taskStore.set(data.taskId, {
+      taskId: data.taskId,
+      taskType: data.taskType,
+      description: data.description,
+      phases: {},
+      logs: [],
+      startTime: Date.now(),
+      totalCost: 0
+    });
+    if (!selectedTaskId) selectTask(data.taskId);
+    else updateSidebar();
   }
   if (data.type === 'phase:start') {
-    const t = tasks[data.taskId];
-    if (t) { t.phases[data.phase] = { status: 'running', startTime: Date.now(), substeps: [] }; renderTask(data.taskId); }
+    const t = taskStore.get(data.taskId);
+    if (t) {
+      t.phases[data.phase] = { status: 'running', startTime: Date.now(), substeps: [], collapsed: false };
+      if (selectedTaskId === data.taskId) renderMain();
+      else updateSidebar();
+    }
   }
   if (data.type === 'phase:end') {
-    const t = tasks[data.taskId];
-    if (t && t.phases[data.phase]) { t.phases[data.phase].status = 'done'; t.phases[data.phase].durationMs = data.durationMs; t.phases[data.phase].cost = data.cost; renderTask(data.taskId); }
+    const t = taskStore.get(data.taskId);
+    if (t && t.phases[data.phase]) {
+      t.phases[data.phase].status = 'done';
+      t.phases[data.phase].durationMs = data.durationMs;
+      t.phases[data.phase].cost = data.cost;
+      t.totalCost = (t.totalCost || 0) + (data.cost || 0);
+      if (selectedTaskId === data.taskId) renderMain();
+      else updateSidebar();
+    }
   }
   if (data.type === 'phase:retry') {
-    const t = tasks[data.taskId];
-    if (t && t.phases[data.phase]) { t.phases[data.phase].status = 'retry'; t.phases[data.phase].attempt = data.attempt; renderTask(data.taskId); }
+    const t = taskStore.get(data.taskId);
+    if (t && t.phases[data.phase]) {
+      t.phases[data.phase].status = 'retry';
+      t.phases[data.phase].attempt = data.attempt;
+      if (selectedTaskId === data.taskId) renderMain();
+    }
   }
   if (data.type === 'substep') {
-    const t = tasks[data.taskId];
-    if (t && t.phases[data.phase]) { t.phases[data.phase].substeps.push({ label: data.label, status: data.status, detail: data.detail }); renderTask(data.taskId); }
+    const t = taskStore.get(data.taskId);
+    if (t && t.phases[data.phase]) {
+      t.phases[data.phase].substeps.push({ label: data.label, status: data.status, detail: data.detail, ts: Date.now() });
+      if (selectedTaskId === data.taskId) renderMain();
+    }
   }
   if (data.type === 'task:completed') {
-    const t = tasks[data.taskId];
-    if (t) { t.completed = true; t.totalDuration = Date.now() - t.startTime; renderTask(data.taskId); }
+    const t = taskStore.get(data.taskId);
+    if (t) {
+      t.completed = true;
+      t.totalDuration = Date.now() - t.startTime;
+      updateSidebar();
+      if (selectedTaskId === data.taskId) renderMain();
+    }
   }
   if (data.type === 'task:failed') {
-    const t = tasks[data.taskId];
-    if (t) { t.failed = true; t.error = data.error; renderTask(data.taskId); }
+    const t = taskStore.get(data.taskId);
+    if (t) {
+      t.failed = true;
+      t.error = data.error;
+      updateSidebar();
+      if (selectedTaskId === data.taskId) renderMain();
+    }
   }
   if (data.type === 'log') {
-    const t = tasks[data.taskId];
-    if (t) { t.logs.push({ level: data.level, message: data.message, ts: data.ts }); renderTask(data.taskId); }
+    const t = taskStore.get(data.taskId);
+    if (t) {
+      t.logs.push({ level: data.level, message: data.message, ts: data.ts, phase: data.phase });
+      if (selectedTaskId === data.taskId) {
+        // A3: incremental log append instead of full renderMain
+        appendLogEntry(data.taskId, { level: data.level, message: data.message, ts: data.ts, phase: data.phase });
+      }
+    }
+  }
+  if (data.type === 'review') {
+    const t = taskStore.get(data.taskId);
+    if (t && t.phases.review) {
+      t.phases.review.reviewData = data.review;
+      if (selectedTaskId === data.taskId) renderMain();
+    }
   }
   if (data.type === 'round:end') {
-    loadHistory();
+    loadRounds();
   }
 }
 
@@ -386,20 +1096,28 @@ async function loadRoundEvents(roundId) {
       }
     }
 
+    const taskHasHtml = roundMeta.taskHasHtml || {};
     let html = `<div class="round-info-bar">${roundMeta.roundId} · ${roundMeta.date} · ${roundMeta.taskCount || '?'} 任务</div>`;
     for (const taskId of Object.keys(tasks)) {
       const task = tasks[taskId];
-      html += `<div class="replay-task"><div class="replay-task-header">${taskId}</div>`;
+      const previewLink = taskHasHtml[taskId] ? `<a href="/preview/${roundMeta.roundId}/${taskId}/" target="_blank" style="color:var(--accent);text-decoration:none;font-size:13px;font-weight:400;margin-left:12px;">🔍 预览</a>` : '';
+      html += `<div class="replay-task"><div class="replay-task-header">${taskId}${previewLink}</div><div class="replay-timeline">`;
       for (const ev of task.events) {
         const time = new Date(ev.ts).toLocaleTimeString();
+        let typeClass = 'type-event';
+        if (ev.type === 'log') typeClass = 'type-log';
+        else if (ev.type.startsWith('phase:')) typeClass = 'type-phase';
+        else if (ev.type === 'task:failed') typeClass = 'type-error';
+        
         let desc = ev.type;
+        let meta = '';
         if (ev.type === 'log') desc = ev.message || 'log';
-        if (ev.phase) desc += ` · ${ev.phase}`;
-        if (ev.durationMs) desc += ` · ${ev.durationMs}ms`;
-        if (ev.attempt) desc += ` · 重试${ev.attempt}`;
-        html += `<div class="replay-event"><span class="ts">${time}</span>${desc}</div>`;
+        if (ev.phase) meta += ' · ' + ev.phase;
+        if (ev.durationMs) meta += ' · ' + ev.durationMs + 'ms';
+        if (ev.attempt) meta += ' · 重试' + ev.attempt;
+        html += `<div class="replay-event ${typeClass}"><span class="ts">${time}</span><span class="event-desc">${desc}</span>${meta ? `<span class="event-meta">${meta}</span>` : ''}</div>`;
       }
-      html += '</div>';
+      html += '</div></div>';
     }
     detail.innerHTML = html;
   } catch (e) {
@@ -407,9 +1125,40 @@ async function loadRoundEvents(roundId) {
   }
 }
 
+async function loadSnapshot() {
+  if (taskStore.size > 0) return;
+  try {
+    const res = await fetch('/api/snapshot/latest');
+    if (!res.ok) return;
+    const snapshot = await res.json();
+    if (!snapshot.tasks || snapshot.tasks.length === 0) return;
+
+    for (const t of snapshot.tasks) {
+      taskStore.set(t.taskId, {
+        taskId: t.taskId,
+        completed: t.success,
+        failed: !t.success,
+        totalDuration: t.duration,
+        totalCost: t.totalCost,
+        hasHtml: t.hasHtml,
+        phases: {},
+        logs: [],
+        startTime: Date.now() - t.duration,
+        reviewData: t.reviewData
+      });
+    }
+    updateSidebar();
+    if (!selectedTaskId) {
+      const firstTask = snapshot.tasks[0];
+      if (firstTask) selectTask(firstTask.taskId);
+    }
+  } catch (e) {}
+}
+
 modeEl.textContent = (window.location.search.includes('mock') ? 'mock' : 'api') + ' · deepseek';
 connectSSE();
 loadRounds();
+loadSnapshot();
 </script>
 </body>
 </html>

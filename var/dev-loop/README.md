@@ -41,22 +41,31 @@ Reviewer ← 02-builder-report.md
 
 ### 步骤说明
 
+每个角色开工前先读自己的 `*-rules.md` 铁则文件，然后再进入正式流程。
+
 1. **Planner**
 
-   * 读取 `active/03-reviewer-summary.md`（上一轮结论）
+   * **先读** `planner-rules.md`
+   * 再读 `active/03-reviewer-summary.md`（上一轮结论）
    * 打包 active 目录的 3 个文件，移入 `history/cycle-XXX/`
    * 清空 `active/`，写入新计划 `01-planner-instruction.md`
 2. **Builder**
 
-   * 只读 `active/01-planner-instruction.md`
+   * **先读** `builder-rules.md`
+   * 再读 `active/01-planner-instruction.md`
    * 执行完成后写入 `active/02-builder-report.md`
 3. **Reviewer**
 
-   * 读取代码 + `02-builder-report.md`
+   * **先读** `reviewer-rules.md`
+   * 再读代码 + `02-builder-report.md`
    * 审查后写入 `active/03-reviewer-summary.md`
 4. **循环**
 
    * 等待 Reviewer 完成后，Planner 开启下一轮
+
+### 反馈自愈
+
+用户指正某个角色时（说错、偏好、新红线），该角色自行更新对应的 `*-rules.md`，在本轮报告末尾注明"已更新 [role]-rules.md"。
 
 \---
 

@@ -16,25 +16,49 @@ class QualityScorer {
     const stability = this.scoreStability(jsonRetries);
     const codeQuality = this.scoreCodeQuality(workDir, files);
     const efficiency = this.scoreEfficiency(totalCost, phases);
+    const llmScores = benchmarkResult.llmScores || null;
 
-    const totalScore = Math.round(
-      completeness * 0.35 +
-      security * 0.25 +
-      stability * 0.20 +
-      codeQuality * 0.10 +
-      efficiency * 0.10
-    );
-
-    return {
-      taskId: benchmarkResult.taskId || 'unknown',
-      totalScore,
-      dimensions: {
+    let totalScore;
+    let dimensions;
+    if (llmScores) {
+      const llmEvaluation = this.scoreLLM(llmScores);
+      totalScore = Math.round(
+        completeness * 0.30 +
+        security * 0.20 +
+        stability * 0.15 +
+        codeQuality * 0.10 +
+        efficiency * 0.10 +
+        llmEvaluation * 0.15
+      );
+      dimensions = {
+        completeness: { score: completeness, weight: 0.30 },
+        security: { score: security, weight: 0.20 },
+        stability: { score: stability, weight: 0.15 },
+        codeQuality: { score: codeQuality, weight: 0.10 },
+        efficiency: { score: efficiency, weight: 0.10 },
+        llmEvaluation: { score: llmEvaluation, weight: 0.15 }
+      };
+    } else {
+      totalScore = Math.round(
+        completeness * 0.35 +
+        security * 0.25 +
+        stability * 0.20 +
+        codeQuality * 0.10 +
+        efficiency * 0.10
+      );
+      dimensions = {
         completeness: { score: completeness, weight: 0.35 },
         security: { score: security, weight: 0.25 },
         stability: { score: stability, weight: 0.20 },
         codeQuality: { score: codeQuality, weight: 0.10 },
         efficiency: { score: efficiency, weight: 0.10 }
-      },
+      };
+    }
+
+    return {
+      taskId: benchmarkResult.taskId || 'unknown',
+      totalScore,
+      dimensions,
       details: {
         testPassRate: testPassRate !== null ? `${testPassRate}/${testPassRate}` : 'N/A',
         securityIssues,
@@ -125,6 +149,13 @@ class QualityScorer {
     if (ratio <= 0.006) return 70;
     if (ratio <= 0.01) return 50;
     return 30;
+  }
+
+  scoreLLM(llmScores) {
+    const values = Object.values(llmScores);
+    if (values.length === 0) return 50;
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
+    return Math.round(avg);
   }
 }
 

@@ -456,14 +456,31 @@ class Orchestrator {
 
     if (!reviewResult.success) throw new Error(reviewResult.error);
     console.log('[Review raw content]', reviewResult.content?.substring?.(0, 400));
+    console.log('[Review reasoning]', reviewResult.reasoning?.substring?.(0, 200) || '无');
     this.emitLog(taskId, 'info', `Review 原始内容: ${reviewResult.content?.substring?.(0, 400)}`);
+    this.emitLog(taskId, 'info', `[Review] reasoning 长度: ${(reviewResult.reasoning || '').length}`);
     const reviewReport = await this.extractJSONWithFallback(reviewResult.content, 'review', taskId);
     const reviewPath = this.saveReport(taskId, 'review', reviewReport);
 
+    const hasA = reviewReport.issues?.some(i => i.level === 'A');
+    const reviewGrade = reviewReport.grade || (hasA ? 'A' : 'C');
+
+    if (reviewReport.scores || reviewReport.grade) {
+      const scoresPath = path.join(PIPE_DIR, taskId, 'review-scores.json');
+      fs.writeFileSync(scoresPath, JSON.stringify({
+        taskId,
+        grade: reviewGrade,
+        scores: reviewReport.scores || {},
+        summary: reviewReport.summary || '',
+        reviewedAt: new Date().toISOString()
+      }, null, 2));
+      this.emitLog(taskId, 'info', `Review 等级: ${reviewGrade}, 评分: ${JSON.stringify(reviewReport.scores)}`);
+    }
+
     return {
-      status: reviewReport.pass ? 'success' : 'fail',
-      nextAction: reviewReport.pass ? 'request_test' : 'request_fix',
-      summary: reviewReport.summary || 'Review 完成',
+      status: hasA ? 'fail' : 'success',
+      nextAction: hasA ? 'request_fix' : 'request_test',
+      summary: reviewReport.summary || `评审等级: ${reviewGrade}`,
       artifacts: { reviewReport: reviewPath }
     };
   }
@@ -544,30 +561,47 @@ class Orchestrator {
   /**
    * 辅助方法：从 LLM 输出中提取 JSON
    */
-  extractJSON(text) {
+  extractJSON(text, taskId) {
     if (typeof text !== 'string') {
       throw new Error(`Expected string, got ${typeof text}`);
     }
     try {
       return JSON.parse(text);
     } catch (e) {
-      const blockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
+      let cleaned = text;
+
+      const blockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       if (blockMatch) {
-        try { return JSON.parse(blockMatch[1]); } catch (e2) {}
+        cleaned = blockMatch[1];
       }
-      const objMatch = text.match(/\{[\s\S]*\}/);
-      if (objMatch) {
-        try { return JSON.parse(objMatch[0]); } catch (e2) {}
+
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        cleaned = cleaned.substring(firstBrace, lastBrace + 1);
       }
+
+      cleaned = cleaned
+        .replace(/,\s*([}\]])/g, '$1')
+        .replace(/'/g, '"')
+        .replace(/\/\/.*$/gm, '')
+        .replace(/\/\*[\s\S]*?\*\//g, '');
+
+      try {
+        return JSON.parse(cleaned);
+      } catch (e2) {}
+
       console.error('[extractJSON] Parse failed, raw:', text.substring(0, 400));
-      this.emitLog(taskId, 'error', `extractJSON 解析失败, 原始返回:\n${text.substring(0, 400)}`);
+      if (taskId) {
+        this.emitLog(taskId, 'error', `extractJSON 解析失败, 原始返回:\n${text.substring(0, 400)}`);
+      }
       throw new Error('Failed to extract JSON from LLM output');
     }
   }
 
   async extractJSONWithFallback(text, stage, taskId) {
     try {
-      return this.extractJSON(text);
+      return this.extractJSON(text, taskId);
     } catch (e) {
       console.warn(`[extractJSON] 解析失败，尝试自愈重试 (stage=${stage})`);
       this.emitLog(taskId, 'warn', `extractJSON 自愈重试 (stage=${stage})`);
@@ -576,12 +610,18 @@ class Orchestrator {
       const correctionResult = await this.llmManager.callModel(stage, [
         {
           role: 'user',
-          content: `你的上一条回复不是合法 JSON。请只输出如下格式的纯 JSON 对象，不要任何说明文字、markdown 代码块或前言：\n\n${schemaHint}\n\n需要重新格式化的内容：\n\n${text}`
+          content: `你的上一条回复不是合法 JSON。不要道歉或解释，只输出纯 JSON 对象。请只输出如下格式的纯 JSON 对象，不要任何说明文字、markdown 代码块或前言：
+
+${schemaHint}
+
+需要重新格式化的内容：
+
+${text}`
         }
-      ]);
+      ]);  // 不覆盖 maxTokens，使用模型配置值（coding 需要 20 万 token）
       this.recordCost(taskId, stage, correctionResult);
       if (!correctionResult.success) throw new Error(`自愈调用失败: ${correctionResult.error}`);
-      return this.extractJSON(correctionResult.content);
+      return this.extractJSON(correctionResult.content, taskId);
     }
   }
 
@@ -590,7 +630,7 @@ class Orchestrator {
       planning: `{"task_id":"TASK-xxx","files_to_touch":["src/app.js"],"constraints":[],"acceptance_criteria":[],"coding_hints":""}`,
       coding: `{"version":"1.0","status":"success","summary":"一句话总结","files":[{"path":"src/app.js","content":"..."}],"artifacts":{},"nextAction":"request_review"}`,
       prefilter: `{"passed":true,"issues":[{"severity":"HIGH","description":"...","line":1}]}`,
-      review: `{"approved":true,"issues":[],"summary":"..."}`,
+      review: `{"grade":"C","issues":[{"level":"C","category":"quality","line":1,"desc":"建议","suggestion":"优化"}],"summary":"C级建议","scores":{"requirement_fulfillment":85,"code_quality":80,"maintainability":75,"security":90}}`,
       testing: `{"passed":true,"coverage":80,"issues":[]}`,
       delivery: `{"status":"delivered","summary":"...","nextAction":"complete"}`
     };

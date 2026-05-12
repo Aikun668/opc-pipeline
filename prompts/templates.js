@@ -15,21 +15,30 @@ ${taskDescription}
 项目结构摘要：
 ${projectStructure}
 
-输出要求：
-1. 必须是有效 JSON，不要 markdown 代码块
+  输出要求：
+1. 只输出 **纯 JSON**，不要 markdown 代码块、不要 \`\`\` 标记、不要任何前言或解释
 2. 总字符 < 2000
-3. 格式：
+3. 严格按以下格式（示例中的值仅为演示，请根据实际需求修改）：
+
 {
-  "task_id": "TASK-xxx",
-  "files_to_touch": ["src/auth.ts", "src/types.ts"],
-  "constraints": ["使用 JWT", "添加单元测试"],
-  "acceptance_criteria": [
-    "登录成功返回 token",
-    "token 过期返回 401"
+  "task_id": "TASK-BENCH-BIZ-001",
+  "files_to_touch": [
+    "src/cleaner.ts",
+    "src/app.ts"
   ],
-  "coding_hints": "使用 bcrypt 加密密码"
+  "constraints": [
+    "输出为 CSV 格式",
+    "手机号格式 +86-138-0000-0000"
+  ],
+  "acceptance_criteria": [
+    "重复行被移除",
+    "手机号统一格式",
+    "缺失字段填 N/A"
+  ],
+  "coding_hints": "使用 csv-parse 解析，正则格式化手机号"
 }
 
+重要：JSON 内不要包含注释或占位符，所有值必须是实际数据。
 只输出 JSON，不要任何解释。`;
 }
 
@@ -97,6 +106,8 @@ ${diff}
  * Deep Review 阶段 Prompt（DeepSeek-R1）
  */
 function buildReviewPrompt(spec, diff, prefilterReport) {
+  const isEmptyDiff = !diff || diff.trim().length === 0 || diff.includes('无法生成标准 Diff');
+
   return `你是安全审查专家，深度分析代码。
 
 Spec：
@@ -113,16 +124,54 @@ ${JSON.stringify(prefilterReport, null, 2)}
 - 安全问题（SQL 注入、XSS、认证绕过）
 - 性能隐患（N+1 查询、内存泄漏）
 
-输出 JSON（< 1500 字符）：
-{
-  "pass": false,
-  "issues": [
-    {"severity": "HIGH", "category": "security", "line": 58, "desc": "SQL 注入风险", "suggestion": "使用参数化查询"}
-  ],
-  "summary": "发现 1 个高危问题"
-}
+## 评审等级定义（必须遵守）
 
-只输出 JSON。`;
+即使没有发现错误，也必须给出 grade 和 quality_evaluation，不可跳过。
+
+### 等级说明
+- **A级（非常严重）**：阻断性问题。包括但不限于：安全漏洞、数据丢失风险、核心功能缺失、逻辑错误。A级问题必须修复，否则不予放行。
+- **B级（中等严重）**：需要修改。包括但不限于：边界条件未处理、错误处理缺失、性能隐患、代码异味。建议修改后再放行。
+- **C级（建议优化）**：可优化项。包括但不限于：命名建议、注释补充、代码风格、可读性改进。记录即可，无需阻塞流程。
+
+### 评审规则（反偷懒机制）
+1. 禁止在无错误时直接给满分 grade=A。无错误仅代表无 A 级问题，仍需给出 B/C 级质量评价。
+2. 每次评审必须输出至少 2 条建议（C级），强制做实质性审查。
+3. grade 字段含义：
+   - "A" = 存在至少 1 个 A 级问题
+   - "B" = 无 A 级问题，存在 B 级问题
+   - "C" = 无 A/B 级问题，仅 C 级建议（正常放行）
+4. scores 中的 4 维度评分必须与 grade 和 issues 一致。
+${isEmptyDiff ? `
+### 特殊情况：无代码变更
+当前 diff 为空或几乎没有代码变更，则：
+- grade 强制为 "B"
+- issues 中增加一条 B 级："代码变更量过少，请确认是否完成需求"
+- scores 中的 requirement_fulfillment 降至 30-50 分
+` : ''}
+  输出 JSON（< 1500 字符）：
+  {
+    "grade": "B",
+    "issues": [
+      {"level": "A", "category": "security", "line": 58, "desc": "SQL 注入风险", "suggestion": "使用参数化查询"},
+      {"level": "C", "category": "quality", "line": 102, "desc": "函数过长建议拆分", "suggestion": "提取为独立函数"}
+    ],
+    "summary": "A级1项，B级0项，C级1项",
+    "scores": {
+      "requirement_fulfillment": 85,
+      "code_quality": 70,
+      "maintainability": 75,
+      "security": 90
+    }
+  }
+
+  评分说明（scores 字段）：
+  - requirement_fulfillment: 需求实现度，评估代码是否完整实现了 Spec 中的所有功能
+  - code_quality: 代码质量，评估可读性、结构、错误处理、命名等
+  - maintainability: 可维护性，评估模块化程度、耦合度、文档注释
+  - security: 安全性，评估是否有漏洞或安全隐患
+  - 每项 0-100，越高越好
+
+  只输出 JSON。`;
 }
 
 /**

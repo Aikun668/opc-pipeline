@@ -7,6 +7,7 @@ const { QualityScorer } = require('./quality-scorer');
 const PORT = 3456;
 const ROOT = path.join(__dirname, '..');
 const BENCHMARK_DIR = path.join(ROOT, 'var', 'benchmark');
+const PIPE_DIR = path.join(ROOT, 'var', 'pipe');
 const HUMAN_SCORES_PATH = path.join(BENCHMARK_DIR, 'human-scores.json');
 
 const TEXT_EXTS = new Set(['.js', '.py', '.html', '.md', '.json', '.css', '.sh', '.yml', '.yaml', '.txt', '.ts', '.tsx', '.jsx', '.vue']);
@@ -95,6 +96,10 @@ class LiveServer {
   handleRequest(req, res) {
     const url = new URL(req.url, `http://localhost:${PORT}`);
     const pathname = url.pathname;
+    if (pathname.includes('..')) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Invalid path' }));
+    }
 
     if (pathname === '/') return this.serveHtml(res, 'dashboard.html');
     if (pathname === '/scoring') return this.serveHtml(res, 'scoring.html');
@@ -107,27 +112,57 @@ class LiveServer {
     if (pathname === '/api/scores') return this.serveLegacyScores(res);
     if (pathname.startsWith('/api/scores/')) return this.handleLegacyScores(req, res, pathname);
     if (pathname === '/api/scores/history') return this.serveScoresHistory(res);
+    if (pathname.startsWith('/api/review-scores/')) {
+      const taskId = pathname.replace('/api/review-scores/', '');
+      if (!/^[a-zA-Z0-9_-]+$/.test(taskId)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Invalid taskId' }));
+      }
+      const scoresPath = path.join(PIPE_DIR, taskId, 'review-scores.json');
+      if (fs.existsSync(scoresPath)) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(fs.readFileSync(scoresPath, 'utf8'));
+      } else {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'No review scores' }));
+      }
+      return;
+    }
 
-    res.writeHead(404);
-    res.end('Not found');
+    if (pathname.startsWith('/preview/')) {
+      return this.servePreview(pathname, res);
+    }
+
+    if (pathname.startsWith('/api/snapshot/')) {
+      const roundId = pathname.replace('/api/snapshot/', '');
+      return this.serveSnapshot(roundId, res);
+    }
+
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Not found' }));
   }
 
   handleRoundApi(req, res, pathname, searchParams) {
     const parts = pathname.replace('/api/rounds/', '').split('/');
     const roundId = parts[0];
     const roundDir = this.getRoundDir(roundId);
-    if (!roundDir) { res.writeHead(404); return res.end(JSON.stringify({ error: 'Round not found' })); }
+    if (!roundDir) { res.writeHead(404, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'Round not found' })); }
 
     if (parts.length === 1) {
       const meta = JSON.parse(fs.readFileSync(path.join(roundDir, 'meta.json'), 'utf8'));
       const results = fs.existsSync(path.join(roundDir, 'results.json'))
         ? JSON.parse(fs.readFileSync(path.join(roundDir, 'results.json'), 'utf8')) : {};
+      const taskHasHtml = this.getRoundTaskHasHtml(roundDir);
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ ...meta, ...results }));
+      return res.end(JSON.stringify({ ...meta, ...results, taskHasHtml }));
     }
 
     if (parts[1] === 'events') {
       return this.serveRoundEvents(roundDir, searchParams.get('after'), res);
+    }
+
+    if (parts[1] === 'tasks' && parts.length === 2) {
+      return this.serveRoundTaskList(roundDir, res);
     }
 
     if (parts[1] === 'tasks' && parts[3] === 'files') {
@@ -145,14 +180,56 @@ class LiveServer {
       return this.serveRoundScores(roundDir, res);
     }
 
-    res.writeHead(404);
-    res.end('Not found');
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Not found' }));
   }
 
   serveRounds(res) {
     const rounds = this.getRounds();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(rounds));
+  }
+
+  getRoundTaskHasHtml(roundDir) {
+    const taskHasHtml = {};
+    const tasksDir = path.join(roundDir, 'tasks');
+    if (!fs.existsSync(tasksDir)) return taskHasHtml;
+    const taskIds = fs.readdirSync(tasksDir);
+    for (const taskId of taskIds) {
+      const resultPath = path.join(tasksDir, taskId, 'task-result.json');
+      if (fs.existsSync(resultPath)) {
+        try {
+          const data = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+          taskHasHtml[taskId] = !!data.hasHtml;
+        } catch (e) {}
+      }
+    }
+    return taskHasHtml;
+  }
+
+  serveRoundTaskList(roundDir, res) {
+    const tasksDir = path.join(roundDir, 'tasks');
+    const tasks = [];
+    if (fs.existsSync(tasksDir)) {
+      const taskIds = fs.readdirSync(tasksDir);
+      for (const taskId of taskIds) {
+        const taskDir = path.join(tasksDir, taskId);
+        if (!fs.statSync(taskDir).isDirectory()) continue;
+        const resultPath = path.join(taskDir, 'task-result.json');
+        let status = 'unknown';
+        let hasOutput = false;
+        if (fs.existsSync(resultPath)) {
+          try {
+            const data = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+            status = data.success ? 'success' : 'failed';
+            hasOutput = !!data.hasHtml;
+          } catch (e) {}
+        }
+        tasks.push({ taskId, status, hasOutput });
+      }
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(tasks));
   }
 
   serveRoundEvents(roundDir, after, res) {
@@ -185,17 +262,17 @@ class LiveServer {
   serveRoundFile(roundDir, taskId, filePath, res) {
     const outputDir = path.join(roundDir, 'tasks', taskId, 'output');
     if (!fs.existsSync(outputDir)) {
-      res.writeHead(404);
-      return res.end('Not found');
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Not found' }));
     }
     const resolved = path.resolve(outputDir, filePath || '');
     if (!resolved.startsWith(outputDir)) {
-      res.writeHead(403);
-      return res.end('Forbidden');
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Forbidden' }));
     }
     if (!fs.existsSync(resolved) || fs.statSync(resolved).isDirectory()) {
-      res.writeHead(404);
-      return res.end('File not found');
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'File not found' }));
     }
     const ext = path.extname(resolved).toLowerCase();
     if (!TEXT_EXTS.has(ext)) {
@@ -238,12 +315,6 @@ class LiveServer {
       }
     }
 
-    const humanScores = this.readHumanScores();
-    const roundKey = path.basename(roundDir);
-    if (humanScores.rounds[roundKey]) {
-      scores.humanScores = humanScores.rounds[roundKey].tasks || {};
-    }
-
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(scores));
   }
@@ -266,15 +337,6 @@ class LiveServer {
           savedAt: Date.now()
         };
         fs.writeFileSync(scoresPath, JSON.stringify(scores, null, 2));
-
-        const humanScores = this.readHumanScores();
-        const roundKey = path.basename(roundDir);
-        if (!humanScores.rounds[roundKey]) {
-          humanScores.rounds[roundKey] = { date: new Date().toISOString().split('T')[0], tasks: {} };
-        }
-        humanScores.rounds[roundKey].tasks[taskId] = scores.humanScores[taskId];
-        this.writeHumanScores(humanScores);
-
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true }));
       } catch (e) {
@@ -303,12 +365,12 @@ class LiveServer {
     }
     const resolved = path.resolve(workDir, filePath || '');
     if (!resolved.startsWith(workDir)) {
-      res.writeHead(403);
-      return res.end('Forbidden');
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Forbidden' }));
     }
     if (!fs.existsSync(resolved) || fs.statSync(resolved).isDirectory()) {
-      res.writeHead(404);
-      return res.end('File not found');
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'File not found' }));
     }
     const ext = path.extname(resolved).toLowerCase();
     if (!TEXT_EXTS.has(ext)) {
@@ -346,8 +408,8 @@ class LiveServer {
     if (req.method === 'POST') {
       return this.saveLegacyScore(taskId, req, res);
     }
-    res.writeHead(404);
-    res.end('Not found');
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Not found' }));
   }
 
   saveLegacyScore(taskId, req, res) {
@@ -410,8 +472,8 @@ class LiveServer {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(fs.readFileSync(htmlPath, 'utf8'));
     } else {
-      res.writeHead(404);
-      res.end(`${filename} not found`);
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: `${filename} not found` }));
     }
   }
 
@@ -457,6 +519,150 @@ class LiveServer {
     }
     summary.label = filename.includes('business') ? '业务题' : '通用题';
     return summary;
+  }
+
+  servePreview(pathname, res) {
+    const parts = pathname.replace('/preview/', '').split('/');
+    if (parts.length < 2) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Invalid preview path' }));
+    }
+    let roundId = parts[0];
+    const taskId = parts[1];
+    let filePath = parts.slice(2).join('/') || '';
+
+    if (roundId === 'latest') {
+      const rounds = this.getRounds();
+      if (rounds.length === 0) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'No rounds available' }));
+      }
+      roundId = rounds[rounds.length - 1].roundId;
+    }
+
+    if (!/^[a-zA-Z0-9_-]+$/.test(roundId) || !/^[a-zA-Z0-9_-]+$/.test(taskId)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Invalid roundId or taskId' }));
+    }
+
+    const baseDir = path.join(BENCHMARK_DIR, roundId, 'tasks', taskId, 'output');
+    const resolved = path.normalize(path.join(baseDir, filePath));
+    if (!resolved.startsWith(baseDir)) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Forbidden' }));
+    }
+
+    if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
+      const indexPath = path.join(resolved, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        return res.end(fs.readFileSync(indexPath, 'utf8'));
+      }
+      return this.serveDirectoryListing(resolved, pathname, res);
+    }
+
+    if (!fs.existsSync(resolved)) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'File not found' }));
+    }
+
+    const ext = path.extname(resolved).toLowerCase();
+    const mimeTypes = {
+      '.html': 'text/html; charset=utf-8',
+      '.css': 'text/css; charset=utf-8',
+      '.js': 'application/javascript; charset=utf-8',
+      '.json': 'application/json',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.svg': 'image/svg+xml',
+      '.ico': 'image/x-icon'
+    };
+    const contentType = mimeTypes[ext] || 'application/octet-stream';
+    res.writeHead(200, { 'Content-Type': contentType });
+    res.end(fs.readFileSync(resolved));
+  }
+
+  serveDirectoryListing(dir, pathname, res) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    const files = entries.filter(e => !e.isDirectory()).map(e => ({
+      name: e.name,
+      size: fs.statSync(path.join(dir, e.name)).size
+    }));
+    const dirs = entries.filter(e => e.isDirectory()).map(e => e.name);
+    const currentPath = pathname.endsWith('/') ? pathname : pathname + '/';
+
+    const parts = currentPath.replace('/preview/', '').split('/').filter(Boolean);
+    let breadcrumbs = '<a href="/preview/">preview</a>';
+    let bcPath = '/preview/';
+    for (let i = 0; i < parts.length; i++) {
+      bcPath += parts[i] + '/';
+      breadcrumbs += ' / ' + (i === parts.length - 1 ? parts[i] : `<a href="${bcPath}">${parts[i]}</a>`);
+    }
+
+    let html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>文件列表</title>
+<style>
+body{font-family:'SFMono-Regular','Cascadia Code','Consolas',monospace;background:#0d1117;color:#c9d1d9;padding:24px;max-width:800px;margin:0 auto}
+h1{font-size:18px;border-bottom:1px solid #30363d;padding-bottom:12px}
+.breadcrumbs{color:#8b949e;font-size:13px;margin-bottom:16px}
+.breadcrumbs a{color:#58a6ff;text-decoration:none}
+.item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)}
+.item:hover{background:rgba(255,255,255,0.03)}
+a{color:#58a6ff;text-decoration:none}
+a:hover{text-decoration:underline}
+.size{color:#8b949e;font-size:12px}
+.dir{font-weight:700}
+.back{color:#8b949e}
+</style></head><body>
+<div class="breadcrumbs">${breadcrumbs}</div>
+<h1>📁 ${parts[parts.length - 1] || 'preview'}</h1>`;
+
+    if (currentPath !== '/preview/') {
+      const parent = currentPath.split('/').slice(0, -2).join('/') + '/';
+      html += `<div class="item back"><a href="${parent}">← 上级目录</a></div>`;
+    }
+
+    for (const d of dirs) {
+      html += `<div class="item"><a href="${currentPath}${d}/" class="dir">📂 ${d}/</a></div>`;
+    }
+
+    for (const f of files) {
+      const size = f.size < 1024 ? f.size + ' B' : (f.size / 1024).toFixed(1) + ' KB';
+      html += `<div class="item"><a href="${currentPath}${f.name}">📄 ${f.name}</a><span class="size">${size}</span></div>`;
+    }
+
+    if (dirs.length === 0 && files.length === 0) {
+      html += '<div style="color:#8b949e;padding:24px 0;">空目录</div>';
+    }
+
+    html += '</body></html>';
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(html);
+  }
+
+  serveSnapshot(roundId, res) {
+    if (roundId === 'latest') {
+      const rounds = this.getRounds();
+      if (rounds.length === 0) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'No rounds available' }));
+      }
+      roundId = rounds[rounds.length - 1].roundId;
+    }
+    const roundDir = this.getRoundDir(roundId);
+    if (!roundDir) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Round not found' }));
+    }
+    const snapshotPath = path.join(roundDir, 'snapshot.json');
+    if (!fs.existsSync(snapshotPath)) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Snapshot not found' }));
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(fs.readFileSync(snapshotPath, 'utf8'));
   }
 
   listFiles(workDir) {

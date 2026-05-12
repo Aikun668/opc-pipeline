@@ -9,7 +9,7 @@ const path = require('path');
 const os = require('os');
 
 // 在 dotenv 加载前设置 OPC_SPAWN_MODE
-const spawnMode = process.env.OPC_SPAWN_MODE || 'mock';
+const spawnMode = process.env.OPC_SPAWN_MODE || 'api';
 process.env.OPC_SPAWN_MODE = spawnMode;
 
 const ROOT = path.join(__dirname, '..');

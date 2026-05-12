@@ -62,6 +62,7 @@ class BenchmarkArchiver {
       archiveReason = '临时目录已清理';
     }
 
+    const hasHtml = this.hasHtmlFile(outputDir);
     const taskResult = {
       taskId,
       success: result.success,
@@ -69,6 +70,7 @@ class BenchmarkArchiver {
       totalCost: result.totalCost,
       phases: result.phases,
       finalPhase: result.finalPhase,
+      hasHtml,
       archived,
       archiveReason: archiveReason || undefined
     };
@@ -92,6 +94,19 @@ class BenchmarkArchiver {
     }
   }
 
+  hasHtmlFile(dir) {
+    if (!fs.existsSync(dir)) return false;
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (this.hasHtmlFile(path.join(dir, entry.name))) return true;
+      } else if (entry.name.endsWith('.html') || entry.name.endsWith('.htm')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   finalizeRound(roundId, summary) {
     const roundDir = path.join(BENCHMARK_DIR, roundId);
     const results = {
@@ -100,6 +115,9 @@ class BenchmarkArchiver {
       finalizedAt: Date.now()
     };
     fs.writeFileSync(path.join(roundDir, 'results.json'), JSON.stringify(results, null, 2));
+
+    const snapshot = this.buildSnapshot(roundId);
+    fs.writeFileSync(path.join(roundDir, 'snapshot.json'), JSON.stringify(snapshot, null, 2));
 
     const roundsPath = path.join(BENCHMARK_DIR, 'rounds.json');
     let rounds = [];
@@ -120,6 +138,56 @@ class BenchmarkArchiver {
     fs.writeFileSync(roundsPath, JSON.stringify(rounds, null, 2));
 
     return results;
+  }
+
+  buildSnapshot(roundId) {
+    const roundDir = path.join(BENCHMARK_DIR, roundId);
+    const tasksDir = path.join(roundDir, 'tasks');
+    const tasks = [];
+    let totalCost = 0, totalDuration = 0, successCount = 0;
+
+    if (fs.existsSync(tasksDir)) {
+      const taskIds = fs.readdirSync(tasksDir);
+      for (const taskId of taskIds) {
+        const resultPath = path.join(tasksDir, taskId, 'task-result.json');
+        if (!fs.existsSync(resultPath)) continue;
+        try {
+          const data = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+          totalCost += data.totalCost || 0;
+          totalDuration += data.duration || 0;
+          if (data.success) successCount++;
+
+          let reviewData = null;
+          const scoresPath = path.join(tasksDir, taskId, 'output', 'review-scores.json');
+          if (fs.existsSync(scoresPath)) {
+            try { reviewData = JSON.parse(fs.readFileSync(scoresPath, 'utf8')); }
+            catch (e) {}
+          }
+
+          tasks.push({
+            taskId: data.taskId,
+            success: data.success,
+            duration: data.duration,
+            totalCost: data.totalCost,
+            phases: data.phases,
+            hasHtml: data.hasHtml,
+            reviewData
+          });
+        } catch (e) {}
+      }
+    }
+
+    return {
+      roundId,
+      timestamp: Date.now(),
+      summary: {
+        taskCount: tasks.length,
+        successCount,
+        totalCost,
+        totalDuration
+      },
+      tasks
+    };
   }
 }
 

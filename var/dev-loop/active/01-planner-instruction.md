@@ -1,77 +1,101 @@
-# Planner 指令 | Round A-16 | 2026-05-02
+# Planner 指令 | Round A-33 | 2026-05-12
 
 ## 任务 ID
-TASK-A-016
+TASK-A-033
 
 ## 任务类型
-bugfix
+bugfix + UI redesign（预览致命 bug 修复 + scoring 浅色主题重构）
 
-## 目标
+## 背景
 
-修复两个 Dashboard 信息缺失问题：历史回放 LOG 事件不显示消息内容 + LLM 返回占位内容时无法追溯原始响应。
+A-31 scoring 重写遗留了两个严重问题和一个主题问题，用户明确要求评分系统"绝对不能要暗色"。
 
-## 验收标准
+## 问题清单
 
-- [ ] Dashboard 历史回放中，LOG 类型事件显示具体日志消息（而非仅显示 "log"）
-- [ ] 当 LLM 编码阶段返回占位/模板内容（如 `// 示例内容`）时，原始 LLM 响应被保存到文件，可供审查
+### 问题 1：预览功能全程不可用（致命）
 
-## 具体修改
-
-### Fix 1 — `src/public/dashboard.html`（1 处修改）
-
-`loadRoundEvents` 函数（约 L393）中，事件描述 `desc` 的生成逻辑增加 LOG 类型特殊处理：
-
-```
-当前：desc = ev.type
-改为：if (ev.type === 'log') desc = ev.message || 'log'
-```
-
-同时在 `loadRoundEvents` 的渲染 HTML 中（约 L399），对 LOG 事件显示消息内容。
-
-### Fix 2 — `src/orchestrator.js`（2 处修改）
-
-#### 2a — 编码阶段保存原始 LLM 响应
-
-`executeCoding` 方法中，在 `extractJSON` 解析之后（约 L358），增加：
-
+**根因**：`src/live-server.js:677`，`listFiles()` 路径拼接用反斜杠：
 ```js
-// 保存原始 LLM 响应供审查
-const rawDir = path.join(this.pipeDir, taskId);
-if (!fs.existsSync(rawDir)) fs.mkdirSync(rawDir, { recursive: true });
-const rawPath = path.join(rawDir, '_llm-response.json');
-fs.writeFileSync(rawPath, JSON.stringify({
-  model: result.model || 'unknown',
-  usage: result.usage || {},
-  rawContent: result.content,
-  parsedAt: new Date().toISOString()
-}, null, 2));
+// 错误：Windows 风格分隔符
+const relPath = prefix ? `${prefix}\${entry.name}` : entry.name;
 ```
+Linux/WSL 上 `\` 是合法文件名字符，不是路径分隔符。影响链：
+1. `listFiles` 返回文件路径如 `src\index.html`（一个畸形的扁平文件名）
+2. scoring `buildTree()` 用 `/` split → 文件树无法建层级，显示为扁平异常路径
+3. `selectFile()` 调 API 传 `src\index.html` → `path.resolve` 找不到文件 → 404
+4. `/preview/` 同上 → iframe 加载失败
 
-文件写入 `var/pipe/TASK-XXX/_llm-response.json`，包含完整原始 content（未截断）。
+**修复**：`\` → `/`（1 字符）
 
-#### 2b — 检测占位内容并告警
+### 问题 2：主题必须从暗色改为浅色
 
-编码阶段解析出文件列表后，遍历每个文件的内容，检测是否匹配占位模式（如 `// 示例内容`、`// TODO` 等）。若匹配则 emit 一条 LOG 事件告警：
+用户原话："评分页面的后面的那个背景色绝对不能要暗色，直接和监测面板颜色一样的不就行了吗"
 
-```js
-const placeholderPattern = /\/\/\s*(示例|示例内容|todo|TODO|example)/;
-for (const file of files) {
-  if (placeholderPattern.test(file.content || '')) {
-    this.emitLog(taskId, 'warn', `[占位检测] ${file.path} 包含占位内容，建议人工审查`);
-  }
+但实际上 dashboard 也是暗色。用户真实意图：**评分页面不能是暗色**，要浅色专业风格。
+
+参考 Supabase DESIGN.md：白色画布（`#ffffff`），近黑文字（`#171717`），翡翠绿点缀，极简 chrome。Vercel 同理。
+
+**配色方案**（对齐 Supabase/Vercel 白画布风格）：
+
+```css
+:root {
+  --bg: #ffffff;
+  --card: #ffffff;
+  --surface2: #fafafa;
+  --border: #ebebeb;
+  --border-hairline: rgba(0,0,0,0.06);
+  --text: #171717;
+  --text-muted: #666666;
+  --accent: #0072f5;          /* Vercel 蓝，链接/选中 */
+  --success: #3ecf8e;          /* Supabase 翡翠绿，C 级 */
+  --warning: #d29922;
+  --error: #f85149;
+  --radius: 8px;
+  --radius-sm: 6px;
+  --shadow: 0px 0px 0px 1px rgba(0,0,0,0.08);  /* Vercel shadow-as-border */
 }
 ```
 
-## 不修改的文件
+### 问题 3：评分栏可滚动 + 高度可调
 
-- `config/`、`tests/`、`scripts/`（不含 `src/` 下的 .js 文件 — 但本次两个 fix 都需要修改 `src/` 下的文件，注意与之前的约束不同）
+当前 `.score-area` 固定 `height: 320px`，三栏评分卡 + issue 列表挤在 320px 内，需要频繁滚动。用户要求评分栏应该可以滑动。
 
-## 验证方式
+**修复**：
+- 评分栏改为可拖拽调整高度（resize handle），默认 40vh
+- 也可简化为：`min-height: 320px; max-height: 60vh; flex-shrink: 0;` 让内容自然撑开
 
-1. 运行 `node scripts/run-task.js --id BENCH-BIZ-001 --file tests/benchmark/tasks-business.json`
-2. 打开 Dashboard，展开历史轮次查看 LOG 事件是否显示消息内容
-3. 检查 `var/pipe/TASK-BENCH-BIZ-001/_llm-response.json` 是否存在且包含完整原始内容
+### 问题 4：细节打磨
 
-## 完成后
+| # | 问题 | 修复 |
+|---|------|------|
+| 4a | 文件树切换任务时不清空旧数据 | selectTask 开头已设 `taskFiles = []`，但 renderFileTree 在 fetch 完成后才调 — 加 loading 状态 |
+| 4b | 预览 iframe 高度不足 | `height: 100%` 依赖父容器，改为 `min-height: 100%` 或 `flex: 1` |
+| 4c | 返回按钮点击后文件树高亮未清除 | `backToFileTree()` 已处理 ✅ |
+| 4d | select 下拉框暗色主题残留 | 跟随主题变量走，浅色后自然修复 |
 
-Builder 填写 `02-builder-report.md`，附验证截图描述。
+## 文件涉及
+
+| 文件 | 改动 |
+|------|------|
+| `src/live-server.js` | L677: `\` → `/`（1 字符） |
+| `src/public/scoring.html` | CSS 变量全量替换（暗→浅）+ 评分栏高度可调 + 细节修复 |
+
+## 不修改
+- `src/public/dashboard.html`（保持暗色不动）
+- `scripts/` / `config/`
+- 零新依赖
+
+## 设计参考
+- Supabase DESIGN.md：白色画布品牌，翡翠绿点缀，Circular/Inter 字体，shadow 替代 border
+- Vercel DESIGN.md：Geist 字体体系，shadow-as-border 技法
+
+## 验证
+1. 浏览器打开 `/scoring` → 白色背景，不是暗色
+2. 选 round → 选任务 → 文件树正确显示层级结构
+3. 点击 .html 文件 → iframe 正确渲染
+4. 点击 .js/.py 文件 → 代码高亮显示
+5. 评分栏可滚动查看 issue 列表
+
+---
+
+产出文件：`var/dev-loop/active/01-planner-instruction.md`

@@ -77,8 +77,8 @@ class LLMManager {
 
     // 熔断器保护
     const breaker = this.breakerManager.getBreaker(`llm-${stage}`, {
-      failureThreshold: 3,
-      timeout: 60000
+      failureThreshold: 5,
+      timeout: 30000
     });
 
     const result = await breaker.execute(async () => {
